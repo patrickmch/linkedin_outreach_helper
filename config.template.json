@@ -29,7 +29,8 @@
       "Solopreneurs/coaches without business operations experience",
       "Works in industries with very low AI adoption: agriculture, hospitality, non-profit (unless tech-forward)",
       "Junior individual contributors without influence on tool/vendor decisions"
-    ]
+    ],
+    "minScore": 70
   },
   "browser": {
     "userDataDir": "./chrome-profile",

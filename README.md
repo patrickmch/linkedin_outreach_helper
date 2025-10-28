@@ -122,7 +122,21 @@ npm run scrape -- --url "https://www.linkedin.com/sales/search/people?query=(fil
 
 ### 3. Qualify Leads
 
-#### Option A: Manual Review (Perfect for Testing!)
+#### Option A: MCP with Claude Code (Recommended - Automated & Free!)
+
+Fully automated qualification using Claude Code via MCP - **zero API costs, zero manual work!**
+
+1. **One-time setup**: Configure MCP in Claude Desktop (see `MCP_SETUP.md`)
+2. **In Claude Desktop, simply say**: "Qualify all my LinkedIn profiles using MCP tools"
+3. **Claude automatically**: Analyzes each profile, scores them, saves qualified leads
+
+**Benefits:**
+- ✅ Fully automated - no manual copy/paste
+- ✅ Zero API costs (included in Claude Pro)
+- ✅ Uses Claude Code intelligence
+- ✅ See `MCP_SETUP.md` for complete setup guide
+
+#### Option B: Manual Review (Testing & Refinement)
 
 Test without API costs using Claude Code:
 
@@ -141,15 +155,15 @@ npm run review -- --index 1
 - Learn what makes a good lead for your use case
 - See `MANUAL_REVIEW.md` for the complete workflow
 
-#### Option B: Automated Qualification
+#### Option C: API Qualification
 
-Run AI qualification on all scraped profiles:
+Run AI qualification using Anthropic API:
 ```bash
 npm run qualify
 ```
 
 This will:
-- Analyze each profile using Claude API
+- Analyze each profile using Claude API (~$0.003/profile)
 - Score each lead (0-100)
 - Determine if they match your criteria
 - Save qualified prospects to `data/qualified/`
