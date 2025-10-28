@@ -17,6 +17,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const PROJECT_ROOT = join(__dirname, '..');
 const QUALIFIED_DIR = join(PROJECT_ROOT, 'data', 'qualified');
+const DISQUALIFIED_DIR = join(PROJECT_ROOT, 'data', 'disqualified');
 
 /**
  * Ensure qualified directory exists
@@ -28,7 +29,51 @@ function ensureQualifiedDir() {
 }
 
 /**
- * Get list of already qualified profile names
+ * Ensure disqualified directory exists
+ */
+function ensureDisqualifiedDir() {
+  if (!existsSync(DISQUALIFIED_DIR)) {
+    mkdirSync(DISQUALIFIED_DIR, { recursive: true });
+  }
+}
+
+/**
+ * Get list of already processed profile names (qualified + disqualified)
+ */
+function getProcessedProfileNames() {
+  const names = new Set();
+
+  // Get qualified profiles
+  ensureQualifiedDir();
+  const qualifiedFiles = readdirSync(QUALIFIED_DIR).filter(f => f.endsWith('.json'));
+  qualifiedFiles.forEach(file => {
+    try {
+      const filepath = join(QUALIFIED_DIR, file);
+      const data = JSON.parse(readFileSync(filepath, 'utf8'));
+      names.add(data.name);
+    } catch (error) {
+      // Skip invalid files
+    }
+  });
+
+  // Get disqualified profiles
+  ensureDisqualifiedDir();
+  const disqualifiedFiles = readdirSync(DISQUALIFIED_DIR).filter(f => f.endsWith('.json'));
+  disqualifiedFiles.forEach(file => {
+    try {
+      const filepath = join(DISQUALIFIED_DIR, file);
+      const data = JSON.parse(readFileSync(filepath, 'utf8'));
+      names.add(data.name);
+    } catch (error) {
+      // Skip invalid files
+    }
+  });
+
+  return names;
+}
+
+/**
+ * Get list of qualified profile names only
  */
 function getQualifiedProfileNames() {
   ensureQualifiedDir();
@@ -49,25 +94,25 @@ function getQualifiedProfileNames() {
 }
 
 /**
- * Get next unqualified profile
+ * Get next unprocessed profile
  */
 function getNextUnqualifiedProfile() {
   const allProfiles = loadAllProfiles();
-  const qualifiedNames = getQualifiedProfileNames();
+  const processedNames = getProcessedProfileNames();
 
-  // Find first profile that hasn't been qualified
-  const unqualified = allProfiles.find(p => !qualifiedNames.has(p.name));
+  // Find first profile that hasn't been processed yet
+  const unprocessed = allProfiles.find(p => !processedNames.has(p.name));
 
-  return unqualified || null;
+  return unprocessed || null;
 }
 
 /**
- * Get unqualified profiles count
+ * Get unprocessed profiles count
  */
 function getUnqualifiedCount() {
   const allProfiles = loadAllProfiles();
-  const qualifiedNames = getQualifiedProfileNames();
-  return allProfiles.filter(p => !qualifiedNames.has(p.name)).length;
+  const processedNames = getProcessedProfileNames();
+  return allProfiles.filter(p => !processedNames.has(p.name)).length;
 }
 
 /**
@@ -111,9 +156,32 @@ function saveQualification(profileName, qualificationData) {
 
     return { saved: true, filepath, qualified: true };
   } else {
-    // Just increment disqualified counter
+    // Save to disqualified directory
+    ensureDisqualifiedDir();
+    const timestamp = Date.now();
+    const filename = `disqualified_${timestamp}_${profile.name.replace(/[^a-zA-Z0-9]/g, '_')}.json`;
+    const filepath = join(DISQUALIFIED_DIR, filename);
+
+    const prospect = {
+      ...profile,
+      qualification: {
+        isQualified: false,
+        analysis: {
+          qualified,
+          score,
+          reasoning,
+          strengths,
+          concerns,
+          recommendedApproach
+        },
+        disqualifiedAt: new Date().toISOString()
+      }
+    };
+
+    writeFileSync(filepath, JSON.stringify(prospect, null, 2));
     incrementDisqualified();
-    return { saved: false, qualified: false, reason: qualified ? 'Score below threshold' : 'Not qualified' };
+
+    return { saved: true, filepath, qualified: false };
   }
 }
 
@@ -264,9 +332,9 @@ Profiles remaining: ${getUnqualifiedCount()}`;
           recommendedApproach
         });
 
-        const message = result.saved
+        const message = result.qualified
           ? `✓ Profile "${profileName}" saved as QUALIFIED (score: ${score}/100)\n  Location: ${result.filepath}`
-          : `✗ Profile "${profileName}" marked as DISQUALIFIED (${result.reason})`;
+          : `✗ Profile "${profileName}" saved as DISQUALIFIED (score: ${score}/100)\n  Location: ${result.filepath}`;
 
         return {
           content: [
@@ -315,11 +383,14 @@ MINIMUM SCORE THRESHOLD: ${config.qualification.minScore || 70}`;
     case 'get_stats': {
       const allProfiles = loadAllProfiles();
       const qualifiedNames = getQualifiedProfileNames();
-      const unqualifiedCount = getUnqualifiedCount();
+      const processedNames = getProcessedProfileNames();
+      const unprocessedCount = getUnqualifiedCount();
+      const disqualifiedCount = processedNames.size - qualifiedNames.size;
 
       const statsText = `Total profiles scraped: ${allProfiles.length}
 Qualified profiles: ${qualifiedNames.size}
-Remaining to qualify: ${unqualifiedCount}`;
+Disqualified profiles: ${disqualifiedCount}
+Remaining to process: ${unprocessedCount}`;
 
       return {
         content: [
