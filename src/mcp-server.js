@@ -94,6 +94,87 @@ function getQualifiedProfileNames() {
 }
 
 /**
+ * Get all qualified profiles
+ */
+function getQualifiedProfiles() {
+  ensureQualifiedDir();
+  const files = readdirSync(QUALIFIED_DIR).filter(f => f.endsWith('.json'));
+  const profiles = [];
+
+  files.forEach(file => {
+    try {
+      const filepath = join(QUALIFIED_DIR, file);
+      const data = JSON.parse(readFileSync(filepath, 'utf8'));
+      profiles.push({ ...data, _filepath: filepath });
+    } catch (error) {
+      // Skip invalid files
+    }
+  });
+
+  return profiles;
+}
+
+/**
+ * Get next qualified profile to contact (not yet contacted)
+ */
+function getNextToContact() {
+  const qualified = getQualifiedProfiles();
+
+  // Find first profile that hasn't been contacted
+  const uncontacted = qualified.find(p => !p.outreach || !p.outreach.contacted);
+
+  return uncontacted || null;
+}
+
+/**
+ * Mark profile as contacted
+ */
+function markAsContacted(profileName, notes = '') {
+  const qualified = getQualifiedProfiles();
+  const profile = qualified.find(p => p.name === profileName);
+
+  if (!profile) {
+    throw new Error(`Qualified profile not found: ${profileName}`);
+  }
+
+  // Update profile with outreach data
+  profile.outreach = {
+    contacted: true,
+    contactedAt: new Date().toISOString(),
+    notes: notes
+  };
+
+  // Remove internal filepath property
+  delete profile._filepath;
+
+  // Find the original file and update it
+  const qualifiedFiles = readdirSync(QUALIFIED_DIR).filter(f => f.endsWith('.json'));
+  let updated = false;
+
+  for (const file of qualifiedFiles) {
+    const filepath = join(QUALIFIED_DIR, file);
+    try {
+      const data = JSON.parse(readFileSync(filepath, 'utf8'));
+      if (data.name === profileName) {
+        // Update the file with new outreach data
+        data.outreach = profile.outreach;
+        writeFileSync(filepath, JSON.stringify(data, null, 2));
+        updated = true;
+        break;
+      }
+    } catch (error) {
+      // Skip invalid files
+    }
+  }
+
+  if (!updated) {
+    throw new Error(`Could not update profile file for: ${profileName}`);
+  }
+
+  return { success: true, profile };
+}
+
+/**
  * Get next unprocessed profile
  */
 function getNextUnqualifiedProfile() {
@@ -269,6 +350,33 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           required: [],
         },
       },
+      {
+        name: 'get_next_to_contact',
+        description: 'Get the next qualified profile to contact (profile that has not yet been contacted)',
+        inputSchema: {
+          type: 'object',
+          properties: {},
+          required: [],
+        },
+      },
+      {
+        name: 'mark_contacted',
+        description: 'Mark a qualified profile as contacted with timestamp and optional notes',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            profileName: {
+              type: 'string',
+              description: 'The exact name of the profile that was contacted',
+            },
+            notes: {
+              type: 'string',
+              description: 'Optional notes about the outreach (e.g., connection request sent, message sent, etc.)',
+            },
+          },
+          required: ['profileName'],
+        },
+      },
     ],
   };
 });
@@ -400,6 +508,77 @@ Remaining to process: ${unprocessedCount}`;
           },
         ],
       };
+    }
+
+    case 'get_next_to_contact': {
+      const profile = getNextToContact();
+      if (!profile) {
+        return {
+          content: [
+            {
+              type: 'text',
+              text: 'No more qualified profiles to contact. All qualified profiles have been contacted!',
+            },
+          ],
+        };
+      }
+
+      // Format profile data nicely
+      const profileText = `Next Profile to Contact: ${profile.name}
+Title: ${profile.title}
+Company: ${profile.company}
+URL: ${profile.url}
+
+Qualification Score: ${profile.qualification?.analysis?.score || 'N/A'}/100
+
+Qualification Summary:
+${profile.qualification?.analysis?.reasoning || 'N/A'}
+
+Strengths:
+${profile.qualification?.analysis?.strengths?.map(s => `- ${s}`).join('\n') || 'N/A'}
+
+Recommended Approach:
+${profile.qualification?.analysis?.recommendedApproach || 'N/A'}`;
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: profileText,
+          },
+        ],
+      };
+    }
+
+    case 'mark_contacted': {
+      const { profileName, notes } = args;
+
+      try {
+        const result = markAsContacted(profileName, notes || '');
+
+        const message = `✓ Profile "${profileName}" marked as contacted
+  Contacted at: ${result.profile.outreach.contactedAt}
+  Notes: ${result.profile.outreach.notes || 'None'}`;
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: message,
+            },
+          ],
+        };
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: 'text',
+              text: `Error: ${error.message}`,
+            },
+          ],
+          isError: true,
+        };
+      }
     }
 
     default:

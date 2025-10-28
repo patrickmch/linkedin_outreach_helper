@@ -1,5 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk';
-import { writeFileSync, existsSync, mkdirSync } from 'fs';
+import { writeFileSync, existsSync, mkdirSync, readdirSync, readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { config } from './config.js';
@@ -279,7 +279,6 @@ export async function qualifyAllProfiles() {
  */
 export function getQualifiedSummary() {
   ensureQualifiedDir();
-  const { readdirSync, readFileSync } = await import('fs');
 
   const files = readdirSync(QUALIFIED_DIR).filter((file) => file.endsWith('.json'));
 

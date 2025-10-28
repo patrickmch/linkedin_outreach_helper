@@ -11,7 +11,8 @@
     "stats": "node src/index.js stats",
     "export": "node src/index.js export",
     "review": "node src/index.js review",
-    "mcp": "node src/mcp-server.js"
+    "mcp": "node src/mcp-server.js",
+    "outreach": "node src/outreach.js"
   },
   "keywords": [
     "linkedin",

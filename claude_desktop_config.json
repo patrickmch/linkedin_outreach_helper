@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "linkedin-outreach": {
+      "command": "node",
+      "args": [
+        "/Users/mchey/code/linkedin-outreach-helper/src/mcp-server.js"
+      ],
+      "cwd": "/Users/mchey/code/linkedin-outreach-helper"
+    }
+  }
+}
