@@ -1,16 +1,5 @@
-import puppeteer from 'puppeteer-extra';
-import StealthPlugin from 'puppeteer-extra-plugin-stealth';
-import { readFileSync, existsSync } from 'fs';
-import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
+import { launchBrowserWithAuth } from './auth.js';
 import { sleep, humanDelay } from './utils.js';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-const PROJECT_ROOT = join(__dirname, '..');
-const COOKIES_PATH = join(PROJECT_ROOT, 'cookies.json');
-
-puppeteer.use(StealthPlugin());
 
 /**
  * Send connection request to a LinkedIn profile via Sales Navigator
@@ -19,29 +8,15 @@ export async function sendConnectionRequest(profileUrl) {
   console.log(`\n=== Sending Connection Request ===\n`);
   console.log(`Profile URL: ${profileUrl}`);
 
-  // Launch browser
-  const browser = await puppeteer.launch({
-    headless: false, // Keep visible so you can see what's happening
-    defaultViewport: null,
-    args: [
-      '--no-sandbox',
-      '--disable-setuid-sandbox',
-      '--disable-web-security',
-      '--disable-features=IsolateOrigins,site-per-process'
-    ]
-  });
+  // Launch browser with authentication
+  const { browser, page, cookies } = await launchBrowserWithAuth();
+
+  if (!cookies) {
+    await browser.close();
+    throw new Error('No cookies found. Please run "npm run login" first to authenticate.');
+  }
 
   try {
-    const page = await browser.newPage();
-
-    // Load cookies if they exist
-    if (existsSync(COOKIES_PATH)) {
-      console.log('Loading saved cookies...');
-      const cookies = JSON.parse(readFileSync(COOKIES_PATH, 'utf8'));
-      await page.setCookie(...cookies);
-    } else {
-      throw new Error('No cookies found. Please run the scraper first to login.');
-    }
 
     // Navigate to the profile
     console.log('Navigating to profile...');

@@ -12,6 +12,7 @@
     "export": "node src/index.js export",
     "review": "node src/index.js review",
     "mcp": "node src/mcp-server.js",
+    "login": "node src/auth.js",
     "outreach": "node src/outreach.js"
   },
   "keywords": [
