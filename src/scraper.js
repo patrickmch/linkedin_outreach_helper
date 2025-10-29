@@ -471,26 +471,35 @@ export async function scrapeFromSalesNav(page, searchUrl, maxProfiles = 10) {
         break;
       }
 
-      // Click on the profile link to navigate (more human-like than direct URL navigation)
-      console.log(`\nClicking on profile link...`);
-      const profileLinkElements = await page.$$(profileSelector);
+      // Click to open profile (opens sidebar - just like a real user)
+      console.log(`\nOpening profile sidebar...`);
 
-      if (profileIndex >= profileLinkElements.length) {
-        console.log('Profile link index out of bounds, skipping');
+      try {
+        const profileLinkElements = await page.$$(profileSelector);
+
+        if (profileIndex >= profileLinkElements.length) {
+          console.log('Profile link index out of bounds, skipping');
+          continue;
+        }
+
+        // Hover over the link first (human behavior)
+        await profileLinkElements[profileIndex].hover();
+        await sleep(randomDelay(300, 800));
+
+        // Click to open sidebar preview
+        await profileLinkElements[profileIndex].click();
+
+        // Wait for sidebar to load with profile content
+        await sleep(randomDelay(1500, 2500));
+
+        // The sidebar is now open - scrape from it
+        // No need to navigate away - real users often just read the sidebar
+
+      } catch (clickError) {
+        console.error('  Error clicking profile link:', clickError.message);
+        incrementErrors();
         continue;
       }
-
-      // Click the profile link element
-      await profileLinkElements[profileIndex].click();
-
-      // Wait for navigation to complete
-      await page.waitForNavigation({
-        waitUntil: 'networkidle2',
-        timeout: 30000
-      });
-
-      // Add a small random delay after page load
-      await sleep(randomDelay(1500, 3000));
 
       // Scrape the profile (page is already on the profile)
       const profile = await scrapeProfile(page, profileLink);
@@ -503,13 +512,11 @@ export async function scrapeFromSalesNav(page, searchUrl, maxProfiles = 10) {
       // Random human action between profiles
       await performRandomAction(page);
 
-      // Go back to search results if we need more profiles
+      // Close sidebar by clicking elsewhere or just continue
+      // The next profile click will naturally close this sidebar
       if (profilesScraped < maxProfiles && canViewMoreProfiles()) {
-        console.log('\nReturning to search results...');
-
-        // Use browser back button (more human-like than direct URL navigation)
-        await page.goBack();
-        await page.waitForTimeout(randomDelay(1500, 3000));
+        console.log('\nMoving to next profile...');
+        await sleep(randomDelay(1000, 2000));
 
         // Check if we need to go to next page
         if (profilesScraped > 0 && profilesScraped % 25 === 0) {
