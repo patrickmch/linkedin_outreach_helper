@@ -154,19 +154,9 @@ export async function ensureLoggedIn(page) {
   const cookiesLoaded = await loadCookies(page);
 
   if (cookiesLoaded) {
-    // Test if cookies are still valid
-    await page.goto('https://www.linkedin.com/feed/', {
-      waitUntil: 'networkidle2',
-      timeout: 30000
-    }).catch(() => {});
-
-    await sleep(2000);
-    const url = page.url();
-
-    if (url.includes('/feed') || url.includes('/mynetwork')) {
-      console.log('Session restored from cookies');
-      return true;
-    }
+    // Cookies loaded - skip feed test and let Sales Nav navigation serve as session test
+    console.log('Cookies loaded successfully');
+    return true;
   }
 
   // Need to login

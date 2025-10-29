@@ -176,11 +176,13 @@ export async function scrapeProfile(page, profileUrl) {
         });
 
         // Name - try multiple possible selectors
+        // Sidebar-specific selectors first (when scraping from sidebar)
         data.name = trySelectors([
+          'h1[data-x--lead--name]', // Sidebar name header
+          'h1[data-x--lead--name] a', // Sidebar name link
           '.profile-topcard-person-entity__name',
           '.artdeco-entity-lockup__title',
           'h1.text-heading-xlarge',
-          '[data-anonymize="person-name"]',
           '.lead-detail-header h1'
         ]);
 
@@ -448,57 +450,85 @@ export async function scrapeFromSalesNav(page, searchUrl, maxProfiles = 10) {
     console.log(`Remaining daily views: ${getRemainingViews()}`);
 
     try {
-      // Get all profile links on current page using the working selector
-      const profileLinks = await page.evaluate((selector) => {
-        const links = Array.from(
-          document.querySelectorAll(selector)
-        );
-        return links.map((link) => link.href).filter((href, index, self) =>
-          self.indexOf(href) === index && href.includes('/sales/')
-        );
+      // Ensure any previous sidebar is closed before querying
+      await page.keyboard.press('Escape');
+      await sleep(randomDelay(200, 400));
+
+      // Query for profile link elements once with sidebar closed
+      // Get unique profile URLs (deduplicate by profile ID)
+      const profileData = await page.evaluate((selector) => {
+        const links = Array.from(document.querySelectorAll(selector));
+        const seen = new Set();
+        const unique = [];
+
+        links.forEach((link, idx) => {
+          const href = link.href;
+          const match = href.match(/\/sales\/lead\/([^,]+)/);
+          const profileId = match ? match[1] : null;
+
+          if (profileId && !seen.has(profileId)) {
+            seen.add(profileId);
+            unique.push({ href, elementIndex: idx });
+          }
+        });
+
+        return unique;
       }, profileSelector);
 
-      if (profileLinks.length === 0) {
+      if (profileData.length === 0) {
         console.log('No more profiles found on this page');
         break;
       }
 
-      console.log(`Found ${profileLinks.length} profile links on page`);
+      console.log(`Found ${profileData.length} unique profiles on page`);
 
-      // Get the index of the next profile to scrape
-      const profileIndex = profilesScraped % profileLinks.length;
-      const profileLink = profileLinks[profileIndex];
+      // Get the profile at the current index
+      const profileIndex = profilesScraped;
 
-      if (!profileLink) {
-        console.log('No more profiles available');
+      if (profileIndex >= profileData.length) {
+        console.log('No more profiles on this page');
         break;
       }
 
+      // Get the profile data
+      const profileEntry = profileData[profileIndex];
+      const profileLink = profileEntry.href;
+
       // Click to open profile (opens sidebar - just like a real user)
-      console.log(`\nOpening profile sidebar...`);
+      console.log(`\nOpening profile sidebar (profile ${profileIndex + 1})...`);
 
       try {
-        // Ensure any previous sidebar is closed
-        await page.keyboard.press('Escape');
-        await sleep(randomDelay(200, 400));
-
-        // Query for profile link elements with sidebar closed
+        // Get the actual link element by its index in the DOM
         const profileLinkElements = await page.$$(profileSelector);
+        const linkElement = profileLinkElements[profileEntry.elementIndex];
 
-        if (profileIndex >= profileLinkElements.length) {
-          console.log('Profile link index out of bounds, skipping');
+        if (!linkElement) {
+          console.log('Link element not found, skipping');
           continue;
         }
 
         // Hover over the link first (human behavior)
-        await profileLinkElements[profileIndex].hover();
+        await linkElement.hover();
         await sleep(randomDelay(300, 800));
 
         // Click to open sidebar preview
-        await profileLinkElements[profileIndex].click();
+        await linkElement.click();
 
-        // Wait for sidebar to load with profile content
-        await sleep(randomDelay(1500, 2500));
+        // Wait for sidebar to load with NEW profile content
+        // Extract the profile ID from the URL to verify sidebar updated
+        const profileId = profileLink.match(/\/sales\/lead\/([^,]+)/)?.[1];
+        if (profileId) {
+          // Wait for sidebar link containing this profile ID
+          await page.waitForFunction(
+            (id) => {
+              const sidebarLink = document.querySelector(`h1[data-x--lead--name] a[href*="${id}"]`);
+              return sidebarLink !== null;
+            },
+            { timeout: 10000 },
+            profileId
+          ).catch(() => {});
+        }
+        await sleep(randomDelay(500, 1000));
 
         // The sidebar is now open - scrape from it
         // No need to navigate away - real users often just read the sidebar
