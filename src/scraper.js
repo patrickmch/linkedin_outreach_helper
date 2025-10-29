@@ -107,9 +107,9 @@ export async function scrapeProfile(page, profileUrl) {
     await performRandomAction(page);
 
     // Extract profile data
-    const profile = await page.evaluate(() => {
+    const profile = await page.evaluate((profileUrl) => {
       const data = {
-        url: window.location.href,
+        url: profileUrl, // Use the actual profile URL, not window.location.href
         scrapedAt: new Date().toISOString(),
         name: '',
         title: '',
@@ -121,8 +121,11 @@ export async function scrapeProfile(page, profileUrl) {
         profileHtml: ''
       };
 
-      // Detect if this is a Sales Navigator page
-      const isSalesNav = window.location.href.includes('/sales/lead/');
+      // Detect if this is a Sales Navigator page or sidebar
+      // Sidebar: on search page but has profile data loaded
+      const isSalesNav = window.location.href.includes('/sales/lead/') ||
+                         window.location.href.includes('/sales/search/') ||
+                         document.querySelector('[data-anonymize="person-name"]') !== null;
 
       // Helper function to try multiple selectors
       const trySelectors = (selectors) => {
@@ -330,7 +333,7 @@ export async function scrapeProfile(page, profileUrl) {
       }
 
       return data;
-    });
+    }, profileUrl); // Pass profileUrl to page.evaluate
 
     // Save profile
     const filepath = saveProfile(profile);
@@ -475,6 +478,11 @@ export async function scrapeFromSalesNav(page, searchUrl, maxProfiles = 10) {
       console.log(`\nOpening profile sidebar...`);
 
       try {
+        // Ensure any previous sidebar is closed
+        await page.keyboard.press('Escape');
+        await sleep(randomDelay(200, 400));
+
+        // Query for profile link elements with sidebar closed
         const profileLinkElements = await page.$$(profileSelector);
 
         if (profileIndex >= profileLinkElements.length) {
@@ -501,7 +509,7 @@ export async function scrapeFromSalesNav(page, searchUrl, maxProfiles = 10) {
         continue;
       }
 
-      // Scrape the profile (page is already on the profile)
+      // Scrape the profile (sidebar is open)
       const profile = await scrapeProfile(page, profileLink);
 
       if (profile) {
@@ -509,11 +517,18 @@ export async function scrapeFromSalesNav(page, searchUrl, maxProfiles = 10) {
         profilesScraped++;
       }
 
+      // Close the sidebar before moving to next profile
+      // Press Escape key (very human-like way to close modals/sidebars)
+      try {
+        await page.keyboard.press('Escape');
+        await sleep(randomDelay(500, 1000));
+      } catch (error) {
+        // Sidebar might auto-close, continue
+      }
+
       // Random human action between profiles
       await performRandomAction(page);
 
-      // Close sidebar by clicking elsewhere or just continue
-      // The next profile click will naturally close this sidebar
       if (profilesScraped < maxProfiles && canViewMoreProfiles()) {
         console.log('\nMoving to next profile...');
         await sleep(randomDelay(1000, 2000));
