@@ -1,10 +1,63 @@
 import { launchBrowserWithAuth } from './auth.js';
 import { sleep, humanDelay } from './utils.js';
+import fs from 'fs/promises';
+import path from 'path';
+
+/**
+ * Find the qualified profile JSON file by URL
+ */
+async function findQualifiedProfile(profileUrl) {
+  const qualifiedDir = path.join(process.cwd(), 'data', 'qualified');
+
+  try {
+    const files = await fs.readdir(qualifiedDir);
+
+    for (const file of files) {
+      if (file.endsWith('.json')) {
+        const filePath = path.join(qualifiedDir, file);
+        const content = await fs.readFile(filePath, 'utf-8');
+        const profile = JSON.parse(content);
+
+        if (profile.url === profileUrl) {
+          return { profile, filePath };
+        }
+      }
+    }
+  } catch (error) {
+    console.log('Note: Could not find qualified profile JSON');
+  }
+
+  return null;
+}
+
+/**
+ * Update the qualified profile with connection request status
+ */
+async function updateConnectionStatus(profileUrl, status, message = '', error = null) {
+  const result = await findQualifiedProfile(profileUrl);
+
+  if (!result) {
+    console.log('Warning: Could not update profile JSON - file not found');
+    return;
+  }
+
+  const { profile, filePath } = result;
+
+  profile.connection_request = {
+    status,
+    sentAt: new Date().toISOString(),
+    connection_message: message,
+    error: error || undefined
+  };
+
+  await fs.writeFile(filePath, JSON.stringify(profile, null, 2));
+  console.log(`Updated profile status: ${status}`);
+}
 
 /**
  * Send connection request to a LinkedIn profile via Sales Navigator
  */
-export async function sendConnectionRequest(profileUrl) {
+export async function sendConnectionRequest(profileUrl, message = '') {
   console.log(`\n=== Sending Connection Request ===\n`);
   console.log(`Profile URL: ${profileUrl}`);
 
@@ -194,6 +247,10 @@ export async function sendConnectionRequest(profileUrl) {
     await sleep(2000);
 
     console.log('\n✓ Connection request sent successfully!\n');
+
+    // Update profile with pending status
+    await updateConnectionStatus(profileUrl, 'pending', message);
+
     console.log('Browser staying open for debugging. Press Ctrl+C to close when ready.\n');
 
     await humanDelay();
@@ -205,6 +262,16 @@ export async function sendConnectionRequest(profileUrl) {
 
   } catch (error) {
     console.error(`\n✗ Error sending connection request:`, error.message);
+
+    // Determine status based on error message
+    let status = 'not_sent';
+    if (error.message.includes('already be connected') || error.message.includes('already connected')) {
+      status = 'already_connected';
+    }
+
+    // Update profile with error status
+    await updateConnectionStatus(profileUrl, status, message, error.message);
+
     console.log('\nBrowser staying open for debugging. Press Ctrl+C to close when ready.\n');
 
     // Keep browser open indefinitely for debugging
@@ -219,14 +286,15 @@ export async function sendConnectionRequest(profileUrl) {
  */
 async function main() {
   const profileUrl = process.argv[2];
+  const message = process.argv[3] || '';
 
   if (!profileUrl) {
-    console.error('Usage: node src/outreach.js <profile-url>');
-    console.error('Example: node src/outreach.js "https://www.linkedin.com/sales/lead/..."');
+    console.error('Usage: node src/outreach.js <profile-url> [message]');
+    console.error('Example: node src/outreach.js "https://www.linkedin.com/sales/lead/..." "Optional connection message"');
     process.exit(1);
   }
 
-  const result = await sendConnectionRequest(profileUrl);
+  const result = await sendConnectionRequest(profileUrl, message);
 
   if (!result.success) {
     process.exit(1);
