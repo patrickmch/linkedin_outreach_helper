@@ -13,7 +13,8 @@
     "review": "node src/index.js review",
     "mcp": "node src/mcp-server.js",
     "login": "node src/auth.js",
-    "outreach": "node src/outreach.js"
+    "outreach": "node src/outreach.js",
+    "check": "node src/check-profile.js"
   },
   "keywords": [
     "linkedin",
