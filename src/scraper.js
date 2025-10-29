@@ -23,6 +23,35 @@ function randomDelay(min, max) {
 }
 
 /**
+ * Simulate human-like scrolling behavior when viewing a profile
+ * Humans always scroll when reading profiles - bots don't
+ */
+async function humanScroll(page) {
+  // Scroll like a human reading a profile
+  const scrolls = Math.floor(Math.random() * 3) + 2; // 2-4 scrolls
+
+  for (let i = 0; i < scrolls; i++) {
+    await page.evaluate(() => {
+      window.scrollBy({
+        top: 200 + Math.random() * 300, // Random scroll distance (200-500px)
+        behavior: 'smooth'
+      });
+    });
+
+    // Random pause between scrolls (simulates reading time)
+    await sleep(randomDelay(1000, 3000)); // 1-3 seconds
+  }
+
+  // 30% chance to scroll back up (like re-reading something)
+  if (Math.random() < 0.3) {
+    await page.evaluate(() => {
+      window.scrollBy({ top: -150, behavior: 'smooth' });
+    });
+    await sleep(randomDelay(500, 1500));
+  }
+}
+
+/**
  * Ensure profiles directory exists
  */
 function ensureProfilesDir() {
@@ -105,6 +134,9 @@ export async function scrapeProfile(page, profileUrl) {
 
     // Perform random human-like actions
     await performRandomAction(page);
+
+    // Scroll like a human reading the profile
+    await humanScroll(page);
 
     // Extract profile data
     const profile = await page.evaluate((profileUrl) => {
