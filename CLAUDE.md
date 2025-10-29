@@ -23,8 +23,8 @@ The codebase follows a functional module pattern with ES modules:
 ### Data Flow
 
 1. **Scraping**: Browser → Sales Navigator URL → Extract profiles → Save to `profiles/*.json` → Update stats
-2. **Qualification**: Load profiles → Build prompt with criteria → Claude API → Save qualified to `data/qualified/*.json`
-3. **Manual Review**: Load profiles → Generate prompts → Export to markdown for manual analysis
+2. **Qualification (MCP)**: Claude Desktop → MCP Server → Load unqualified profile → Return to Claude Desktop → Save qualification decision to `data/qualified/*.json` or `data/disqualified/*.json`
+3. **Outreach**: Load qualified profiles → Navigate to profile → Send connection request → Track status in profile JSON
 
 ### Anti-Detection Strategy
 
@@ -54,9 +54,8 @@ The scraper targets LinkedIn's specific class names (as of implementation):
 Configuration is loaded from `config.json` (created from `config.template.json`):
 
 - **linkedin**: Email/password credentials
-- **claude**: API key (optional - can use manual review mode without API)
 - **limits**: Daily quota, delay ranges, standard deviation for normal distribution
-- **qualification**: Criteria array, ideal profile description, disqualifiers
+- **qualification**: Criteria array, ideal profile description, disqualifiers, minimum score threshold
 - **browser**: userDataDir path, headless mode, viewport dimensions
 
 ## Common Development Commands
@@ -65,25 +64,31 @@ Configuration is loaded from `config.json` (created from `config.template.json`)
 
 ```bash
 # Test login and save session
-npm run start login
+npm run login
 
 # Scrape profiles from Sales Navigator
 npm run scrape -- --url "SALES_NAV_URL" --number 20
 
-# Qualify profiles using Claude API (requires API key)
-npm run qualify
-
-# Export profiles to markdown for manual review
+# Export profiles to markdown for manual review (optional)
 npm run export
 
-# Generate qualification prompt for specific profile
-npm run review -- --index 1
+# Check if a profile URL has already been scraped
+npm run check -- check "PROFILE_URL"
+
+# List all scraped profiles with qualification status
+npm run check list
+
+# Send connection request to a qualified lead
+npm run outreach -- "PROFILE_URL"
 
 # View statistics
 npm run stats
 
 # Show current config (sanitized)
 npm run start config
+
+# Start MCP server for Claude Desktop qualification
+npm run mcp
 ```
 
 ### Directory Structure
@@ -93,10 +98,15 @@ profiles/              # Scraped profiles as JSON (profile_<timestamp>_<name>.js
 data/
   stats.json          # Daily quota tracking and qualification counts
   cookies.json        # LinkedIn session cookies
-  qualified/          # Qualified prospects with AI analysis
-  profiles_for_review.md  # Exported markdown for manual review
+  qualified/          # Qualified prospects with AI analysis and outreach tracking
+  disqualified/       # Disqualified prospects for record keeping
+  profiles_for_review.md  # Exported markdown for manual review (optional)
 chrome-profile/       # Persistent browser profile (gitignored)
 config.json           # User configuration (gitignored)
+src/
+  mcp-server.js       # Model Context Protocol server for Claude Desktop
+  outreach.js         # Connection request automation
+  check-profile.js    # Duplicate detection utility
 ```
 
 ## Key Implementation Details
@@ -117,21 +127,39 @@ Login flow (browser.js:152-174):
 4. Handle verification challenges with 2-minute timeout for manual completion
 5. Save cookies on successful login
 
-### Claude API Integration
+### Lead Qualification Workflow (MCP Server)
 
-Qualification uses structured prompts (qualifier.js:58-102):
-- Model: `claude-3-5-sonnet-20241022`
-- Max tokens: 1024
-- Returns JSON with: qualified (bool), score (0-100), reasoning, strengths, concerns, recommendedApproach
-- Cost: ~$0.003 per profile
+The system uses a Model Context Protocol (MCP) server that integrates with Claude Desktop for lead qualification:
 
-### Manual Review Workflow
+**Setup** (src/mcp-server.js):
+1. Start MCP server: `npm run mcp`
+2. Configure Claude Desktop to connect to the MCP server
+3. MCP server exposes tools: `get_next_profile`, `save_qualification`, `get_qualification_criteria`, `get_stats`
 
-Alternative to API qualification (zero cost):
-1. `npm run export` generates markdown with all profiles
-2. `npm run review --index N` creates qualification prompt for specific profile
-3. User copies prompt to Claude Code for interactive analysis
-4. Iterates through profiles without API consumption
+**Qualification Flow**:
+1. Open Claude Desktop and say: "Get the next LinkedIn profile to qualify"
+2. Claude Desktop calls `get_next_profile` via MCP → returns unqualified profile with full data
+3. Claude Desktop calls `get_qualification_criteria` → returns criteria from config.json
+4. Claude Desktop analyzes profile against criteria and generates structured analysis
+5. Claude Desktop calls `save_qualification` with results → saves to `data/qualified/` or `data/disqualified/`
+6. Profile includes: qualified (bool), score (0-100), reasoning, strengths, concerns, recommendedApproach
+7. Repeat for next profile
+
+**Benefits**:
+- Zero API costs (uses your existing Claude Desktop subscription)
+- Interactive qualification with ability to ask follow-up questions
+- Automatic tracking of qualified vs disqualified profiles
+- Stats updated in real-time
+
+### Connection Request Tracking
+
+Qualified profiles track outreach status (src/outreach.js:36-55):
+- **connection_request.status**: "not_sent", "pending", "accepted", "already_connected"
+- **connection_request.sentAt**: ISO timestamp
+- **connection_request.connection_message**: Custom message sent (if any)
+- **connection_request.error**: Error message if request failed
+
+Status is automatically updated when running `npm run outreach`
 
 ## Important Considerations
 
@@ -164,10 +192,15 @@ npm run scrape -- --url "URL" --number 5
 
 # Check what was scraped
 ls -la profiles/
+npm run check list
 
-# Test qualification prompt without API
-npm run export
-npm run review -- --index 1
+# Test MCP server qualification
+npm run mcp  # In one terminal
+# Then open Claude Desktop and say "Get the next LinkedIn profile to qualify"
+
+# Test outreach on a qualified lead
+npm run check list  # Find a qualified profile
+npm run outreach -- "PROFILE_URL"
 ```
 
 Monitor the browser window during scraping to observe human-like behavior and catch verification challenges.

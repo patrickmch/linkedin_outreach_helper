@@ -1,11 +1,7 @@
 {
   "linkedin": {
-    "email": "patrickmcheyser@gmail.com",
-    "password": "l1nk333d333n!"
-  },
-  "claude": {
-    "apiKey": "your-anthropic-api-key",
-    "_comment": "API key is optional - use 'npm run export' and 'npm run review' for manual qualification without API costs"
+    "email": "your-email@example.com",
+    "password": "your-password"
   },
   "limits": {
     "maxProfileViewsPerDay": 80,

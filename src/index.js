@@ -3,7 +3,7 @@
 import { Command } from 'commander';
 import { launchBrowser, ensureLoggedIn } from './browser.js';
 import { scrapeFromSalesNav, loadAllProfiles } from './scraper.js';
-import { qualifyAllProfiles, exportProfilesForReview, buildQualificationPrompt } from './qualifier.js';
+import { exportProfilesForReview, buildQualificationPrompt } from './qualifier.js';
 import { displayStats, getRemainingViews } from './stats.js';
 import { config } from './config.js';
 
@@ -55,30 +55,9 @@ program
 
       console.log('\n✓ Scraping complete!');
       console.log('\nNext steps:');
-      console.log('  1. Run "npm run qualify" to qualify the leads');
-      console.log('  2. Run "npm run stats" to see your stats');
-    } catch (error) {
-      console.error('\n✗ Error:', error.message);
-      process.exit(1);
-    }
-  });
-
-/**
- * Qualify command
- */
-program
-  .command('qualify')
-  .description('Qualify scraped profiles using Claude AI')
-  .action(async () => {
-    try {
-      console.log('\n🤖 LinkedIn Outreach Helper - Qualifier\n');
-
-      await qualifyAllProfiles();
-
-      console.log('\n✓ Qualification complete!');
-      console.log('\nNext steps:');
-      console.log('  1. Check data/qualified/ for qualified prospects');
-      console.log('  2. Run "npm run stats" to see your stats');
+      console.log('  1. Open Claude Desktop and say "Get the next LinkedIn profile to qualify"');
+      console.log('  2. Or run "npm run export" to export profiles for manual review');
+      console.log('  3. Run "npm run stats" to see your stats');
     } catch (error) {
       console.error('\n✗ Error:', error.message);
       process.exit(1);
@@ -141,9 +120,6 @@ program
     console.log(`  Email: ${config.linkedin.email}`);
     console.log(`  Password: ${'*'.repeat(config.linkedin.password.length)}`);
     console.log('');
-    console.log('Claude API:');
-    console.log(`  API Key: ${config.claude.apiKey.substring(0, 20)}...`);
-    console.log('');
     console.log('Limits:');
     console.log(`  Max profiles per day: ${config.limits.maxProfileViewsPerDay}`);
     console.log(`  Delay range: ${config.limits.minDelaySeconds}-${config.limits.maxDelaySeconds}s`);
@@ -161,7 +137,7 @@ program
  */
 program
   .command('export')
-  .description('Export scraped profiles to markdown for manual review with Claude Code')
+  .description('Export scraped profiles to markdown for manual review')
   .action(() => {
     try {
       console.log('\n📋 Exporting Profiles for Manual Review\n');
