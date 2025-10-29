@@ -22,7 +22,7 @@ The codebase follows a functional module pattern with ES modules:
 
 ### Data Flow
 
-1. **Scraping**: Browser → Sales Navigator URL → Extract profiles → Save to `profiles/*.json` → Update stats
+1. **Scraping**: Browser → Sales Navigator search → Click profile links (human-like) → Extract profiles → Use back button to return → Save to `profiles/*.json` → Update stats
 2. **Qualification (MCP)**: Claude Desktop → MCP Server → Load unqualified profile → Return to Claude Desktop → Save qualification decision to `data/qualified/*.json` or `data/disqualified/*.json`
 3. **Outreach**: Load qualified profiles → Navigate to profile → Send connection request → Track status in profile JSON
 
@@ -32,10 +32,22 @@ The scraper implements several techniques to avoid LinkedIn detection:
 
 - **Stealth Plugin**: Uses puppeteer-extra-plugin-stealth to mask automation signatures
 - **Persistent Profile**: Maintains chrome-profile directory with userDataDir to preserve cookies and browser fingerprint
+- **Human-like Navigation**: Clicks profile links in search results instead of direct URL navigation (page.goto), uses browser back button (page.goBack) to return to search
+- **Variable Delays**: Random delays (1.5-3 seconds) after navigation using randomDelay() helper function
 - **Normal Distribution Delays**: Generates human-like delays using Box-Muller transform (3-8 seconds configurable)
 - **Random Actions**: 20% chance of random scrolling, mouse movements, or UI interactions between profiles
 - **Daily Limits**: Hard-coded quota system (default 80 profiles/day) tracked in stats.json
 - **Session Persistence**: Saves cookies to `data/cookies.json` to avoid repeated logins
+
+**Navigation Pattern** (scraper.js:474-512):
+1. Find profile links on search results page
+2. Click link element (not direct URL navigation) → wait for navigation
+3. Add random delay (1.5-3s)
+4. Scrape profile data
+5. Use browser back button to return to search → wait with random delay
+6. Repeat for next profile
+
+This mimics human browsing behavior and avoids LinkedIn's bot detection patterns.
 
 ### DOM Selectors
 
