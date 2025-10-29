@@ -32,22 +32,60 @@ The scraper implements several techniques to avoid LinkedIn detection:
 
 - **Stealth Plugin**: Uses puppeteer-extra-plugin-stealth to mask automation signatures
 - **Persistent Profile**: Maintains chrome-profile directory with userDataDir to preserve cookies and browser fingerprint
-- **Human-like Navigation**: Clicks profile links in search results instead of direct URL navigation (page.goto), uses browser back button (page.goBack) to return to search
-- **Variable Delays**: Random delays (1.5-3 seconds) after navigation using randomDelay() helper function
+- **Human-like Navigation**: Clicks profile links to open sidebar preview instead of direct URL navigation, uses Escape key to close sidebars
+- **Randomized Delays**: ALL delays use randomDelay() helper - NEVER use fixed delays (see Anti-Detection Best Practices below)
 - **Normal Distribution Delays**: Generates human-like delays using Box-Muller transform (3-8 seconds configurable)
 - **Random Actions**: 20% chance of random scrolling, mouse movements, or UI interactions between profiles
 - **Daily Limits**: Hard-coded quota system (default 80 profiles/day) tracked in stats.json
 - **Session Persistence**: Saves cookies to `data/cookies.json` to avoid repeated logins
+- **Profile Deduplication**: Filters duplicate DOM links to ensure each profile is scraped only once
 
-**Navigation Pattern** (scraper.js:474-512):
-1. Find profile links on search results page
-2. Click link element (not direct URL navigation) → wait for navigation
-3. Add random delay (1.5-3s)
-4. Scrape profile data
-5. Use browser back button to return to search → wait with random delay
-6. Repeat for next profile
+**Navigation Pattern** (scraper.js:450-580):
+1. Close any previous sidebar (Escape key)
+2. Query for profile links and deduplicate by profile ID
+3. Click link element to open sidebar preview
+4. Wait for sidebar to load with correct profile ID
+5. Scrape profile data from sidebar
+6. Close sidebar (Escape key)
+7. Random human-like action (scrolling, mouse movement)
+8. Add randomized delay before next profile
+9. Repeat for next profile
 
 This mimics human browsing behavior and avoids LinkedIn's bot detection patterns.
+
+### Anti-Detection Best Practices
+
+**CRITICAL: Never Use Fixed Delays**
+
+Humans never act with perfect timing. Fixed delays create detectable patterns. Always use randomized delays:
+
+```javascript
+// ❌ WRONG - Fixed delay (detectable pattern)
+await page.waitForTimeout(3000);
+await sleep(2000);
+
+// ✅ CORRECT - Randomized delay (human-like)
+await sleep(randomDelay(2500, 4000));
+```
+
+**Recommended Delay Ranges:**
+
+- **Between profile views**: `randomDelay(3000, 8000)` - Simulate reading time
+- **After clicks**: `randomDelay(500, 1500)` - Natural click response
+- **Between scrolls**: `randomDelay(1000, 3000)` - Variable scroll speed
+- **After page navigation**: `randomDelay(1500, 3000)` - Page load variation
+- **Content loading**: `randomDelay(1500, 2500)` - Wait for content
+
+**Implementation Notes:**
+
+- The `randomDelay(min, max)` helper generates random integers in the specified range
+- Use `sleep(randomDelay(...))` to apply the randomized delay
+- Avoid setTimeout/setInterval with fixed values
+- Never use patterns like `await sleep(1000 * n)` where n is constant
+
+**Why This Matters:**
+
+Bot detection systems analyze timing patterns. Consistent 3-second delays between actions are a red flag. Randomization within human-realistic ranges makes behavior indistinguishable from real users.
 
 ### DOM Selectors
 

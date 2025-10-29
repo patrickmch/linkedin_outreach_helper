@@ -101,7 +101,7 @@ export async function scrapeProfile(page, profileUrl) {
     console.log(`\nScraping: ${profileUrl}`);
 
     // Profile is already loaded from clicking, just wait for content
-    await sleep(2000);
+    await sleep(randomDelay(1500, 2500));
 
     // Perform random human-like actions
     await performRandomAction(page);
@@ -377,7 +377,7 @@ export async function scrapeFromSalesNav(page, searchUrl, maxProfiles = 10) {
     timeout: 30000
   });
 
-  await sleep(3000);
+  await sleep(randomDelay(2000, 4000));
 
   // Verify navigation succeeded
   const currentUrl = page.url();
@@ -569,7 +569,7 @@ export async function scrapeFromSalesNav(page, searchUrl, maxProfiles = 10) {
           const nextButton = await page.$('button[aria-label="Next"]');
           if (nextButton) {
             await nextButton.click();
-            await sleep(3000);
+            await sleep(randomDelay(2500, 4000));
           } else {
             console.log('No more pages available');
             break;
