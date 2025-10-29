@@ -15,6 +15,14 @@ const PROJECT_ROOT = join(__dirname, '..');
 const PROFILES_DIR = join(PROJECT_ROOT, 'profiles');
 
 /**
+ * Generate random delay between min and max milliseconds
+ * More human-like than fixed delays
+ */
+function randomDelay(min, max) {
+  return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+/**
  * Ensure profiles directory exists
  */
 function ensureProfilesDir() {
@@ -86,16 +94,13 @@ function saveProfile(profile) {
 
 /**
  * Scrape a single LinkedIn profile
+ * Assumes the page is already on the profile (navigated via clicking)
  */
 export async function scrapeProfile(page, profileUrl) {
   try {
     console.log(`\nScraping: ${profileUrl}`);
 
-    await page.goto(profileUrl, {
-      waitUntil: 'networkidle2',
-      timeout: 30000
-    });
-
+    // Profile is already loaded from clicking, just wait for content
     await sleep(2000);
 
     // Perform random human-like actions
@@ -457,15 +462,37 @@ export async function scrapeFromSalesNav(page, searchUrl, maxProfiles = 10) {
 
       console.log(`Found ${profileLinks.length} profile links on page`);
 
-      // Get the next profile link that we haven't scraped yet
-      const profileLink = profileLinks[profilesScraped % profileLinks.length];
+      // Get the index of the next profile to scrape
+      const profileIndex = profilesScraped % profileLinks.length;
+      const profileLink = profileLinks[profileIndex];
 
       if (!profileLink) {
         console.log('No more profiles available');
         break;
       }
 
-      // Scrape the profile
+      // Click on the profile link to navigate (more human-like than direct URL navigation)
+      console.log(`\nClicking on profile link...`);
+      const profileLinkElements = await page.$$(profileSelector);
+
+      if (profileIndex >= profileLinkElements.length) {
+        console.log('Profile link index out of bounds, skipping');
+        continue;
+      }
+
+      // Click the profile link element
+      await profileLinkElements[profileIndex].click();
+
+      // Wait for navigation to complete
+      await page.waitForNavigation({
+        waitUntil: 'networkidle2',
+        timeout: 30000
+      });
+
+      // Add a small random delay after page load
+      await sleep(randomDelay(1500, 3000));
+
+      // Scrape the profile (page is already on the profile)
       const profile = await scrapeProfile(page, profileLink);
 
       if (profile) {
@@ -479,11 +506,10 @@ export async function scrapeFromSalesNav(page, searchUrl, maxProfiles = 10) {
       // Go back to search results if we need more profiles
       if (profilesScraped < maxProfiles && canViewMoreProfiles()) {
         console.log('\nReturning to search results...');
-        await page.goto(searchUrl, {
-          waitUntil: 'networkidle2',
-          timeout: 30000
-        });
-        await sleep(2000);
+
+        // Use browser back button (more human-like than direct URL navigation)
+        await page.goBack();
+        await page.waitForTimeout(randomDelay(1500, 3000));
 
         // Check if we need to go to next page
         if (profilesScraped > 0 && profilesScraped % 25 === 0) {
