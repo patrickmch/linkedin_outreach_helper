@@ -11,28 +11,10 @@ const PROJECT_ROOT = join(__dirname, '..');
 /**
  * Build qualification prompt for manual review
  * Used by export command and MCP server
+ * Note: Qualification criteria should be provided separately (e.g., from Google Drive)
  */
 export function buildQualificationPrompt(profile) {
-  const criteriaText = config.qualification.criteria
-    .map((c, i) => `${i + 1}. ${c}`)
-    .join('\n');
-
-  const disqualifiersText = config.qualification.disqualifiers
-    .map((d, i) => `${i + 1}. ${d}`)
-    .join('\n');
-
-  return `You are a lead qualification expert. Analyze this LinkedIn profile and determine if they match our ideal customer profile.
-
-IDEAL CUSTOMER PROFILE:
-${config.qualification.idealProfile}
-
-QUALIFICATION CRITERIA:
-${criteriaText}
-
-DISQUALIFIERS:
-${disqualifiersText}
-
-PROFILE TO ANALYZE:
+  return `PROFILE TO ANALYZE:
 Name: ${profile.name}
 Title: ${profile.title}
 Company: ${profile.company}
@@ -45,7 +27,7 @@ ${profile.experience.map(exp => `- ${exp.title} at ${exp.company} (${exp.dates})
 Education:
 ${profile.education.map(edu => `- ${edu.degree} from ${edu.school}`).join('\n') || 'N/A'}
 
-Please analyze this profile and respond with a JSON object in the following format:
+Please analyze this profile using the qualification criteria and respond with a JSON object in the following format:
 {
   "qualified": true or false,
   "score": 0-100,
@@ -79,17 +61,8 @@ export function exportProfilesForReview() {
 
   let markdown = `# Profiles for Review\n\n`;
   markdown += `Total profiles: ${profiles.length}\n\n`;
-  markdown += `## Qualification Criteria\n\n`;
-  markdown += `**Ideal Profile:** ${config.qualification.idealProfile}\n\n`;
-  markdown += `**Criteria:**\n`;
-  config.qualification.criteria.forEach((c, i) => {
-    markdown += `${i + 1}. ${c}\n`;
-  });
-  markdown += `\n**Disqualifiers:**\n`;
-  config.qualification.disqualifiers.forEach((d, i) => {
-    markdown += `${i + 1}. ${d}\n`;
-  });
-  markdown += `\n---\n\n`;
+  markdown += `(Reference your qualification criteria from Google Drive)\n\n`;
+  markdown += `---\n\n`;
 
   profiles.forEach((profile, index) => {
     markdown += `## ${index + 1}. ${profile.name}\n\n`;

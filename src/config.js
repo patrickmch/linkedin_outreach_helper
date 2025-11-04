@@ -14,8 +14,7 @@ export function loadConfig() {
 
   if (!existsSync(configPath)) {
     console.error('Error: config.json not found!');
-    console.error('Please ensure config.json exists with your qualification criteria.');
-    console.error('This file should be tracked in git and contain your scoring criteria.');
+    console.error('Please create config.json with: { "minScore": 60 }');
     process.exit(1);
   }
 
@@ -23,12 +22,9 @@ export function loadConfig() {
     const configData = readFileSync(configPath, 'utf8');
     const config = JSON.parse(configData);
 
-    // Validate required fields
-    if (!config.qualification?.criteria || !config.qualification?.idealProfile) {
-      throw new Error('Qualification criteria are required in config.json');
-    }
-
-    return config;
+    return {
+      minScore: config.minScore || 60
+    };
   } catch (error) {
     console.error('Error loading config.json:', error.message);
     process.exit(1);

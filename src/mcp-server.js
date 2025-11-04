@@ -208,7 +208,7 @@ function saveQualification(profileName, qualificationData) {
 
   const { qualified, score, reasoning, strengths, concerns, recommendedApproach } = qualificationData;
 
-  if (qualified && score >= (config.qualification.minScore || 70)) {
+  if (qualified && score >= config.minScore) {
     // Save to qualified directory
     ensureQualifiedDir();
     const timestamp = Date.now();
@@ -327,15 +327,6 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             },
           },
           required: ['profileName', 'qualified', 'score', 'reasoning', 'strengths', 'concerns', 'recommendedApproach'],
-        },
-      },
-      {
-        name: 'get_qualification_criteria',
-        description: 'Get the qualification criteria from config to use when analyzing profiles',
-        inputSchema: {
-          type: 'object',
-          properties: {},
-          required: [],
         },
       },
       {
@@ -469,29 +460,6 @@ Profiles remaining: ${getUnqualifiedCount()}`;
           isError: true,
         };
       }
-    }
-
-    case 'get_qualification_criteria': {
-      const criteria = config.qualification;
-      const criteriaText = `IDEAL CUSTOMER PROFILE:
-${criteria.idealProfile}
-
-QUALIFICATION CRITERIA:
-${criteria.criteria.map((c, i) => `${i + 1}. ${c}`).join('\n')}
-
-DISQUALIFIERS:
-${criteria.disqualifiers.map((d, i) => `${i + 1}. ${d}`).join('\n')}
-
-MINIMUM SCORE THRESHOLD: ${config.qualification.minScore || 70}`;
-
-      return {
-        content: [
-          {
-            type: 'text',
-            text: criteriaText,
-          },
-        ],
-      };
     }
 
     case 'get_stats': {
