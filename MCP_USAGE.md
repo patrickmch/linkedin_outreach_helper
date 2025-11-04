@@ -18,25 +18,46 @@ Use the get_next_profile tool
 
 This will return a profile with all details (name, title, company, experience, education).
 
-### 3. Get qualification criteria
-```
-Use the get_qualification_criteria tool
-```
+### 3. Qualify a profile
+After analyzing a profile against your qualification criteria (in Google Drive), save your decision:
 
-This shows the ideal customer profile and criteria to evaluate against.
+**⚠️ IMPORTANT: Keep responses BRIEF to avoid errors**
 
-### 4. Qualify a profile
-After analyzing a profile, save your decision:
 ```
 Use the save_qualification tool with:
 - profileName: "John Carter"
 - qualified: true
 - score: 85
-- reasoning: "Strong fit as fractional COO consultant working with mid-market companies"
-- strengths: ["Fractional executive experience", "Works with multiple clients", "Denver-based"]
-- concerns: ["Financial services focus may not align with all industries"]
-- recommendedApproach: "Mention expertise in operational scaling for mid-market companies"
+- reasoning: "COO at 50-person consulting firm, posts about scaling ops" (MAX 500 chars)
+- strengths: ["Fractional COO", "Mid-market focus", "Active on LinkedIn"] (2-5 items, MAX 100 chars each)
+- concerns: ["Financial services niche", "May be too busy"] (2-5 items, MAX 100 chars each)
+- recommendedApproach: "Connect on ops scaling challenges, reference recent post" (MAX 500 chars)
 ```
+
+## Character Limits (CRITICAL)
+
+To prevent tool failures, **always keep text concise**:
+
+- **reasoning**: Max 500 characters (~2-3 sentences)
+- **recommendedApproach**: Max 500 characters (~2-3 sentences)
+- **strengths**: 2-5 items, each max 100 characters (~1 sentence)
+- **concerns**: 2-5 items, each max 100 characters (~1 sentence)
+
+### ✅ Good Example (Concise)
+```
+reasoning: "Founder of 30-person B2B SaaS, posts weekly about ops scaling"
+strengths: ["Founder/CEO role", "Active LinkedIn poster", "Mid-market SaaS"]
+concerns: ["May be too busy", "Remote vs Colorado"]
+recommendedApproach: "Reference recent post on scaling challenges"
+```
+
+### ❌ Bad Example (Too Verbose - Will Fail)
+```
+reasoning: "This profile represents an excellent opportunity because they are the founder and CEO of a rapidly growing B2B SaaS company with approximately 30 employees, which falls squarely within our sweet spot of 10-100 employees. Their LinkedIn activity demonstrates consistent engagement with content related to operational scaling challenges, which aligns perfectly with our value proposition around AI automation for growing businesses..."
+strengths: ["They have significant experience as a founder and CEO with demonstrated track record of scaling multiple companies from early stage through growth phases", "Very active on LinkedIn with weekly posts about operational challenges and business scaling", ...]
+```
+
+If you see validation errors, **make your text shorter** and try again.
 
 ### 5. See statistics
 ```

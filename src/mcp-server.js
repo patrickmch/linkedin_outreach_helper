@@ -291,7 +291,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: 'save_qualification',
-        description: 'Save the qualification decision for a profile. If qualified=true and score >= threshold (default 70), saves to qualified directory. Updates stats.',
+        description: 'Save the qualification decision for a profile. IMPORTANT: Keep text concise to avoid errors. Max 500 chars for reasoning/approach, max 100 chars per strength/concern, max 5 items per array.',
         inputSchema: {
           type: 'object',
           properties: {
@@ -309,21 +309,23 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             },
             reasoning: {
               type: 'string',
-              description: 'Detailed explanation of the qualification decision',
+              description: 'Brief explanation (max 500 chars). Be concise.',
             },
             strengths: {
               type: 'array',
               items: { type: 'string' },
-              description: 'List of strengths or positive points about this lead',
+              description: 'List of 2-5 brief strengths (max 100 chars each)',
+              maxItems: 5,
             },
             concerns: {
               type: 'array',
               items: { type: 'string' },
-              description: 'List of concerns or red flags',
+              description: 'List of 2-5 brief concerns (max 100 chars each)',
+              maxItems: 5,
             },
             recommendedApproach: {
               type: 'string',
-              description: 'Suggested approach for outreach (if qualified)',
+              description: 'Brief outreach suggestion (max 500 chars)',
             },
           },
           required: ['profileName', 'qualified', 'score', 'reasoning', 'strengths', 'concerns', 'recommendedApproach'],
@@ -428,6 +430,47 @@ Profiles remaining: ${getUnqualifiedCount()}`;
       const { profileName, qualified, score, reasoning, strengths, concerns, recommendedApproach } = args;
 
       try {
+        // Validate parameter lengths to prevent errors
+        const validationErrors = [];
+
+        if (reasoning && reasoning.length > 500) {
+          validationErrors.push(`reasoning is ${reasoning.length} chars (max 500)`);
+        }
+
+        if (recommendedApproach && recommendedApproach.length > 500) {
+          validationErrors.push(`recommendedApproach is ${recommendedApproach.length} chars (max 500)`);
+        }
+
+        if (strengths && strengths.length > 5) {
+          validationErrors.push(`strengths has ${strengths.length} items (max 5)`);
+        }
+
+        if (strengths && strengths.some(s => s.length > 100)) {
+          const longItems = strengths.filter(s => s.length > 100).map(s => s.substring(0, 50) + '...');
+          validationErrors.push(`some strengths exceed 100 chars: ${longItems.join(', ')}`);
+        }
+
+        if (concerns && concerns.length > 5) {
+          validationErrors.push(`concerns has ${concerns.length} items (max 5)`);
+        }
+
+        if (concerns && concerns.some(c => c.length > 100)) {
+          const longItems = concerns.filter(c => c.length > 100).map(c => c.substring(0, 50) + '...');
+          validationErrors.push(`some concerns exceed 100 chars: ${longItems.join(', ')}`);
+        }
+
+        if (validationErrors.length > 0) {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: `❌ Validation failed - text too long:\n${validationErrors.map(e => `  • ${e}`).join('\n')}\n\nPlease shorten the text and try again.`,
+              },
+            ],
+            isError: true,
+          };
+        }
+
         const result = saveQualification(profileName, {
           qualified,
           score,
