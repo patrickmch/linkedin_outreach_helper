@@ -23,14 +23,8 @@ export function loadConfig() {
     const config = JSON.parse(configData);
 
     // Validate required fields
-    if (!config.linkedin?.email || !config.linkedin?.password) {
-      throw new Error('LinkedIn credentials are required in config.json');
-    }
-
-    // Claude API key is optional (for manual review mode)
-    if (!config.claude?.apiKey) {
-      console.warn('⚠️  Warning: No Claude API key configured. Automated qualification will not work.');
-      console.warn('   You can still use manual review with: npm run export and npm run review\n');
+    if (!config.qualification?.criteria || !config.qualification?.idealProfile) {
+      throw new Error('Qualification criteria are required in config.json');
     }
 
     return config;

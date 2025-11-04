@@ -2,7 +2,7 @@ import { writeFileSync, existsSync, mkdirSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { config } from './config.js';
-import { loadAllProfiles } from './scraper.js';
+import { loadAllProfiles } from './csv-loader.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);

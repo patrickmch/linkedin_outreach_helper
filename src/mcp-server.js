@@ -6,12 +6,11 @@ import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
-import { readFileSync, writeFileSync, readdirSync, existsSync, mkdirSync } from 'fs';
+import { readFileSync, writeFileSync, readdirSync, existsSync, mkdirSync, statSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { config } from './config.js';
-import { loadAllProfiles } from './scraper.js';
-import { incrementQualified, incrementDisqualified } from './stats.js';
+import { loadAllProfiles, findMostRecentCSV } from './csv-loader.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -233,7 +232,6 @@ function saveQualification(profileName, qualificationData) {
     };
 
     writeFileSync(filepath, JSON.stringify(prospect, null, 2));
-    incrementQualified();
 
     return { saved: true, filepath, qualified: true };
   } else {
@@ -260,7 +258,6 @@ function saveQualification(profileName, qualificationData) {
     };
 
     writeFileSync(filepath, JSON.stringify(prospect, null, 2));
-    incrementDisqualified();
 
     return { saved: true, filepath, qualified: false };
   }
@@ -375,6 +372,15 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             },
           },
           required: ['profileName'],
+        },
+      },
+      {
+        name: 'get_csv_info',
+        description: 'Get information about the current LinkedIn CSV file being processed',
+        inputSchema: {
+          type: 'object',
+          properties: {},
+          required: [],
         },
       },
     ],
@@ -565,6 +571,39 @@ ${profile.qualification?.analysis?.recommendedApproach || 'N/A'}`;
             {
               type: 'text',
               text: message,
+            },
+          ],
+        };
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: 'text',
+              text: `Error: ${error.message}`,
+            },
+          ],
+          isError: true,
+        };
+      }
+    }
+
+    case 'get_csv_info': {
+      try {
+        const csvPath = findMostRecentCSV();
+        const stats = statSync(csvPath);
+        const profiles = loadAllProfiles();
+
+        const infoText = `Current LinkedIn CSV:
+  File: ${csvPath}
+  Size: ${(stats.size / 1024).toFixed(2)} KB
+  Modified: ${stats.mtime.toLocaleString()}
+  Total profiles: ${profiles.length}`;
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: infoText,
             },
           ],
         };
