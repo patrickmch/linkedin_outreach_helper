@@ -1,0 +1,28 @@
+{
+  "qualification": {
+    "criteria": [
+      "ROLE/TITLE (30 points): Founder/CEO/COO/VP Operations (25-30pts), Head of Ops/RevOps (15-20pts), Department heads with ops responsibility (5-10pts)",
+      "COMPANY SIZE (25 points): 10-100 employees at $1M-$10M revenue (25pts), 5-10 or 100-250 employees (15-20pts), 1-5 or 250-1000 employees (5-10pts)",
+      "INDUSTRY (20 points): Professional services, B2B SaaS, construction, manufacturing, healthcare services (20pts), E-commerce $2M+, real estate, financial services (10-15pts), Non-profits, hospitality, retail (5pts)",
+      "GROWTH SIGNALS (15 points): Recent promotion, funding, hiring, posts about scaling, joined recently, mentions growth/transformation (+3-5pts each)",
+      "ENGAGEMENT (10 points): Posts weekly (+5pts), comments/engages (+3pts), shares operational challenges (+5pts), in relevant groups (+2pts)",
+      "MUST HAVE: 2nd degree connection, complete profile, currently employed, based in US/Canada",
+      "BONUS: Mutual groups, similar education, Colorado/Mountain West location, outdoor/adventure interests"
+    ],
+    "idealProfile": "Building network of potential referral sources and learning opportunities (5-10/day). Looking for operational leaders at growing companies (10-100 employees, $1M-$10M revenue) who face scaling challenges. Target roles: Founder, CEO, COO, VP Operations at professional services, B2B SaaS, construction, manufacturing, or healthcare services companies. These are people who can refer clients or become clients later - NOT immediate pitch targets. Prefer active LinkedIn users who post about growth, scaling, or operational challenges. Must be 2nd degree connections with complete profiles.",
+    "disqualifiers": [
+      "Enterprise companies (1000+ employees) - too slow, complex buying process",
+      "Solopreneurs (1-2 employees) - no budget, no referral network",
+      "Individual contributors without operations responsibility",
+      "HR/Recruiting focused roles (unless at very small company)",
+      "Pure sales/marketing roles without ops component",
+      "Government/Public Sector",
+      "Pure B2C/consumer businesses without ops complexity",
+      "Entertainment/Media/Influencer roles",
+      "Job seekers or 'seeking opportunities' status",
+      "Incomplete profiles (no photo, minimal experience)",
+      "3rd degree connections or no mutual connections"
+    ],
+    "minScore": 60
+  }
+}

@@ -44,7 +44,7 @@ The codebase follows a functional module pattern with ES modules:
 
 ### Configuration System
 
-Configuration is loaded from `config.json` (created from `config.template.json`):
+Configuration is loaded from `config.json` (tracked in git):
 
 ```json
 {
@@ -95,10 +95,8 @@ Use the save_qualification tool with [profile details]
 # Install dependencies
 npm install
 
-# Copy config template
-cp config.template.json config.json
-
-# Edit config with your qualification criteria
+# Edit config with your qualification criteria if needed
+# config.json is tracked in git with default network-building criteria
 nano config.json
 ```
 

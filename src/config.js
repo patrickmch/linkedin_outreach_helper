@@ -14,7 +14,8 @@ export function loadConfig() {
 
   if (!existsSync(configPath)) {
     console.error('Error: config.json not found!');
-    console.error('Please copy config.template.json to config.json and fill in your credentials.');
+    console.error('Please ensure config.json exists with your qualification criteria.');
+    console.error('This file should be tracked in git and contain your scoring criteria.');
     process.exit(1);
   }
 
