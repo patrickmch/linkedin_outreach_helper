@@ -1,36 +1,21 @@
 {
   "name": "linkedin-outreach-helper",
-  "version": "1.0.0",
-  "description": "LinkedIn Sales Navigator scraper with AI-powered lead qualification",
-  "main": "src/index.js",
+  "version": "2.0.0",
+  "description": "MCP server for AI-powered lead qualification",
+  "main": "src/mcp-server.js",
   "type": "module",
   "scripts": {
-    "start": "node src/index.js",
-    "scrape": "node src/index.js scrape",
-    "stats": "node src/index.js stats",
-    "export": "node src/index.js export",
-    "review": "node src/index.js review",
-    "mcp": "node src/mcp-server.js",
-    "login": "node src/auth.js",
-    "outreach": "node src/outreach.js",
-    "check": "node src/check-profile.js"
+    "mcp": "node src/mcp-server.js"
   },
   "keywords": [
-    "linkedin",
-    "scraper",
-    "lead-generation",
-    "automation"
+    "mcp",
+    "lead-qualification",
+    "claude",
+    "ai"
   ],
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.27.0",
-    "@modelcontextprotocol/sdk": "^1.20.2",
-    "chalk": "^5.3.0",
-    "commander": "^11.1.0",
-    "ora": "^8.0.1",
-    "puppeteer": "^24.26.1",
-    "puppeteer-extra": "^3.3.6",
-    "puppeteer-extra-plugin-stealth": "^2.11.2"
+    "@modelcontextprotocol/sdk": "^1.20.2"
   }
 }

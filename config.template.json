@@ -1,15 +1,5 @@
 {
-  "linkedin": {
-    "email": "your-email@example.com",
-    "password": "your-password"
-  },
-  "limits": {
-    "maxProfileViewsPerDay": 80,
-    "minDelaySeconds": 3,
-    "maxDelaySeconds": 10,
-    "delayStdDev": 1.5
-  },
-"qualification": {
+  "qualification": {
     "criteria": [
       "Connectors: Fractional executives (COO, CFO, CTO), business operations consultants, digital transformation consultants, agency owners",
       "Mid-market decision makers: Directors/VPs of Operations, CTOs, COOs at 100-500 employee companies",
@@ -27,13 +17,5 @@
       "Junior individual contributors without influence on tool/vendor decisions"
     ],
     "minScore": 70
-  },
-  "browser": {
-    "userDataDir": "./chrome-profile",
-    "headless": false,
-    "viewport": {
-      "width": 1280,
-      "height": 800
-    }
   }
 }
