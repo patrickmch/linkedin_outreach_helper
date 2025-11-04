@@ -290,6 +290,19 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         },
       },
       {
+        name: 'get_next_batch',
+        description: 'Get the next 5 unqualified profiles for batch processing. ⚠️ CRITICAL: You MUST load qualification criteria from Google Drive before using this tool! Process: 1) Quick screen for obvious disqualifiers, 2) Deep analysis on promising ones only, 3) Save all 5.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            batchSize: {
+              type: 'number',
+              description: 'Number of profiles to return (default 5, max 10)',
+            },
+          },
+        },
+      },
+      {
         name: 'save_qualification',
         description: 'Save the qualification decision for a profile. IMPORTANT: Keep text concise to avoid errors. Max 500 chars for reasoning/approach, max 100 chars per strength/concern, max 5 items per array.',
         inputSchema: {
@@ -431,6 +444,71 @@ Profiles remaining: ${unqualifiedCount}`;
           {
             type: 'text',
             text: profileText,
+          },
+        ],
+      };
+    }
+
+    case 'get_next_batch': {
+      const batchSize = Math.min(args.batchSize || 5, 10);
+      const allProfiles = loadAllProfiles();
+      const processedNames = getProcessedProfileNames();
+
+      const unprocessedProfiles = allProfiles.filter(p => !processedNames.has(p.name));
+      const batch = unprocessedProfiles.slice(0, batchSize);
+
+      if (batch.length === 0) {
+        return {
+          content: [
+            {
+              type: 'text',
+              text: 'No more profiles to qualify. All profiles have been processed!',
+            },
+          ],
+        };
+      }
+
+      const unqualifiedCount = unprocessedProfiles.length;
+      const isFirstBatch = unqualifiedCount === allProfiles.length;
+
+      // Forceful reminder to load criteria
+      let reminder = '';
+      if (isFirstBatch) {
+        reminder = `🚨 CRITICAL REMINDER: Load your qualification criteria from Google Drive RIGHT NOW before analyzing!\n\n`;
+      }
+
+      // Format batch nicely
+      let batchText = `${reminder}Batch of ${batch.length} profiles (${unqualifiedCount} remaining):\n\n`;
+      batchText += `PROCESS:\n`;
+      batchText += `1. Quick screen for obvious disqualifiers (incomplete, pure sales, government, etc)\n`;
+      batchText += `2. Deep analysis ONLY on promising ones\n`;
+      batchText += `3. Save all ${batch.length} using save_qualification\n\n`;
+      batchText += `---\n\n`;
+
+      batch.forEach((profile, i) => {
+        batchText += `[${i + 1}] ${profile.name}\n`;
+        batchText += `Title: ${profile.title}\n`;
+        batchText += `Company: ${profile.company}\n`;
+        batchText += `Location: ${profile.location}\n`;
+
+        if (profile.about && profile.about.length > 200) {
+          batchText += `About: ${profile.about.substring(0, 200)}...\n`;
+        } else {
+          batchText += `About: ${profile.about || 'N/A'}\n`;
+        }
+
+        if (profile.experience && profile.experience.length > 0) {
+          batchText += `Current: ${profile.experience[0].title} at ${profile.experience[0].company}\n`;
+        }
+
+        batchText += `\n`;
+      });
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: batchText,
           },
         ],
       };

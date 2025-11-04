@@ -2,9 +2,44 @@
 
 This MCP server is already configured in your Claude Desktop. Use these commands to qualify LinkedIn profiles from your CSV exports.
 
-## Quick Start
+## Quick Start (Batch Processing - RECOMMENDED)
 
-**Important**: Claude Desktop accesses the CSV data through MCP tools, not by reading the file directly. Use these exact phrases:
+**Faster workflow**: Process 5 profiles at once instead of one-by-one.
+
+### 1. Load your qualification criteria from Google Drive
+**CRITICAL**: Open your qualification criteria document in Google Drive BEFORE starting!
+
+### 2. Get a batch of 5 profiles
+```
+Use the get_next_batch tool
+```
+
+This returns 5 profiles with summary info (name, title, company, current role).
+
+### 3. Quick screen for obvious disqualifiers
+Look for immediate red flags:
+- Incomplete profiles (no photo, minimal experience)
+- Pure sales/marketing roles without ops
+- Government/public sector
+- Enterprise (1000+ employees)
+- Solopreneurs (1-2 employees)
+
+### 4. Deep analysis ONLY on promising ones
+For profiles that pass the quick screen, analyze against your full criteria.
+
+### 5. Save all 5 qualifications
+Use `save_qualification` for each profile (whether qualified or disqualified).
+
+### 6. Repeat with next batch
+```
+Use the get_next_batch tool
+```
+
+---
+
+## Alternative: Single Profile Mode
+
+If you prefer one-at-a-time:
 
 ### 1. Check what CSV is loaded
 ```
@@ -93,12 +128,64 @@ Here's how to qualify all 73 profiles from your CSV:
 ## Available MCP Tools
 
 - `get_csv_info` - Shows which CSV file is loaded and profile count
+- `get_next_batch` - **[RECOMMENDED]** Returns 5 profiles for batch processing
 - `get_next_profile` - Returns next unqualified profile with full details
-- `get_qualification_criteria` - Shows your ideal customer profile criteria
 - `save_qualification` - Saves your qualification decision (qualified/disqualified)
 - `get_stats` - Shows qualification statistics
 - `get_next_to_contact` - Gets next qualified profile to reach out to
 - `mark_contacted` - Marks profile as contacted with notes
+
+## Batch Processing Example
+
+**Step 1: Get batch**
+```
+Use get_next_batch
+```
+
+**Response:**
+```
+🚨 CRITICAL REMINDER: Load your qualification criteria from Google Drive RIGHT NOW!
+
+Batch of 5 profiles (73 remaining):
+
+PROCESS:
+1. Quick screen for obvious disqualifiers
+2. Deep analysis ONLY on promising ones
+3. Save all 5 using save_qualification
+
+---
+
+[1] John Carter
+Title: Director, Risk Management Association
+Company: Denver Banker
+Location: Denver Metropolitan Area
+...
+
+[2] Tom Q.
+Title: Settlement Specialist
+Company: Arcadia Settlements Group
+...
+```
+
+**Step 2: Quick screen**
+- [1] John Carter - Promising (banking ops, Denver)
+- [2] Tom Q. - Disqualify (niche settlement industry)
+- [3] Mary Smith - Promising (COO, 50 employees)
+- [4] Bob Jones - Disqualify (pure sales role)
+- [5] Alice Lee - Promising (Founder, B2B SaaS)
+
+**Step 3: Deep analysis on #1, #3, #5 only**
+
+**Step 4: Save all 5**
+```
+Use save_qualification for John Carter...
+Use save_qualification for Tom Q. (qualified: false, score: 25, ...)
+Use save_qualification for Mary Smith...
+Use save_qualification for Bob Jones (qualified: false, score: 15, ...)
+Use save_qualification for Alice Lee...
+```
+
+**Result**: 5 profiles qualified in one batch! Much faster than 1-by-1.
 
 ## How It Works
 
