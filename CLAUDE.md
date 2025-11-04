@@ -15,24 +15,30 @@ The system uses a Model Context Protocol (MCP) server that integrates with Claud
 **File:** `src/mcp-server.js`
 
 **Available Tools:**
-1. `get_next_profile` - Returns the next unqualified profile from the profiles directory
-2. `save_qualification` - Saves qualification results (score, reasoning, qualified status)
-3. `get_qualification_criteria` - Returns the qualification criteria from config.json
-4. `get_stats` - Shows qualification statistics
+1. `get_csv_info` - Shows which CSV file is loaded and profile count
+2. `get_next_profile` - Returns the next unqualified profile from the CSV
+3. `save_qualification` - Saves qualification results (score, reasoning, qualified status)
+4. `get_qualification_criteria` - Returns the qualification criteria from config.json
+5. `get_stats` - Shows qualification statistics
+6. `get_next_to_contact` - Gets next qualified profile to reach out to
+7. `mark_contacted` - Marks profile as contacted with notes
 
 **Data Flow:**
-1. User places profile JSON files in `profiles/` directory
-2. User opens Claude Desktop and says "Get the next LinkedIn profile to qualify"
-3. MCP server reads next unqualified profile
-4. Claude evaluates profile against criteria
-5. User confirms, MCP server saves to `data/qualified/` or `data/disqualified/`
-6. Repeat
+1. User exports profiles from LinkedIn Sales Navigator to CSV
+2. CSV is automatically detected in ~/Downloads (most recent "Profiles downloaded from..." file)
+3. User opens Claude Desktop and says "Use the get_next_profile tool"
+4. MCP server loads profile from CSV
+5. Claude evaluates profile against criteria
+6. User confirms, Claude uses save_qualification tool
+7. MCP server saves to `data/qualified/` or `data/disqualified/`
+8. Repeat for all 73 profiles
 
 ### Module Structure
 
 The codebase follows a functional module pattern with ES modules:
 
 - **src/mcp-server.js** - MCP server with profile qualification tools
+- **src/csv-loader.js** - Automatically finds and parses LinkedIn CSV exports from ~/Downloads
 - **src/config.js** - Configuration loader (loads from config.json)
 - **src/qualifier.js** - Prompt building utilities for lead scoring
 
@@ -56,6 +62,29 @@ Configuration is loaded from `config.json` (created from `config.template.json`)
     "minScore": 70
   }
 }
+```
+
+## CSV Export Format
+
+The MCP server automatically finds the most recent LinkedIn Sales Navigator CSV export in ~/Downloads. The CSV contains comprehensive profile data:
+
+- **Identity**: full_name, headline, location_name, profile_url
+- **Experience**: Up to 10 positions (organization_1 through organization_10) with titles, dates, descriptions
+- **Education**: Up to 3 schools with degrees and fields of study
+- **Skills**: Comma-separated list with endorsement counts
+- **Connections**: connections_count, mutual connections
+
+The csv-loader.js module parses this data and converts it to a normalized profile format for qualification.
+
+## Usage Instructions
+
+See `MCP_USAGE.md` for detailed instructions on using the MCP server with Claude Desktop.
+
+**Quick Start in Claude Desktop:**
+```
+Use the get_csv_info tool
+Use the get_next_profile tool
+Use the save_qualification tool with [profile details]
 ```
 
 ## Setup
