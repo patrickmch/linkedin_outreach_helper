@@ -282,7 +282,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
     tools: [
       {
         name: 'get_next_profile',
-        description: 'Get the next unqualified LinkedIn profile to analyze. Returns profile data including name, title, company, experience, education, etc.',
+        description: 'Get the next unqualified LinkedIn profile to analyze. ⚠️ IMPORTANT: Load qualification criteria from Google Drive first! Returns profile data including name, title, company, experience, education, etc.',
         inputSchema: {
           type: 'object',
           properties: {},
