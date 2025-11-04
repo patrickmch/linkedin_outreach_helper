@@ -398,8 +398,18 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         };
       }
 
+      const unqualifiedCount = getUnqualifiedCount();
+      const allProfiles = loadAllProfiles();
+      const isFirstProfile = unqualifiedCount === allProfiles.length;
+
+      // Add reminder to load criteria if this is the first profile
+      let reminder = '';
+      if (isFirstProfile) {
+        reminder = `📋 REMINDER: Load your qualification criteria from Google Drive before analyzing profiles!\n\n`;
+      }
+
       // Format profile data nicely
-      const profileText = `Profile: ${profile.name}
+      const profileText = `${reminder}Profile: ${profile.name}
 Title: ${profile.title}
 Company: ${profile.company}
 Location: ${profile.location}
@@ -414,7 +424,7 @@ ${profile.experience.map(exp => `- ${exp.title} at ${exp.company} (${exp.dates})
 Education:
 ${profile.education.map(edu => `- ${edu.degree} from ${edu.school}`).join('\n') || 'N/A'}
 
-Profiles remaining: ${getUnqualifiedCount()}`;
+Profiles remaining: ${unqualifiedCount}`;
 
       return {
         content: [
