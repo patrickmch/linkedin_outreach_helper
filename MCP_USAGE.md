@@ -160,15 +160,69 @@ Use the get_profile_for_outreach tool
 
 ---
 
+## Outreach Message Review
+
+After generating messages, review them before sending:
+
+### 1. Get next message to review
+```
+Use the get_next_outreach_for_review tool
+```
+
+This displays:
+- Profile summary (name, title, company, score)
+- Qualification analysis (reasoning, strengths, recommended approach)
+- The generated outreach message
+- Count of messages remaining to review
+
+### 2. Review the message and choose action:
+
+**Option A: Approve the message**
+```
+Use the approve_outreach tool with:
+- profileName: "John Carter"
+```
+Marks message as approved and ready to send.
+
+**Option B: Revise the message**
+If you want to change the tone, fix wording, or adjust content:
+```
+Use the revise_outreach tool with:
+- profileName: "John Carter"
+- newMessage: "Hey John, saw you're building..."
+```
+Updates the message and clears any previous approval.
+
+**Option C: Disqualify the prospect**
+If you decide they're not a good fit after all, move them to disqualified manually or use the existing qualification tools.
+
+### 3. Repeat until all reviewed
+```
+Use the get_next_outreach_for_review tool
+```
+Continue until all messages are approved!
+
+---
+
 ## Available MCP Tools
 
+### Qualification Tools
 - `get_csv_info` - Shows which CSV file is loaded and profile count
 - `get_next_batch` - **[RECOMMENDED]** Returns 5 profiles for batch processing
 - `get_next_profile` - Returns next unqualified profile with full details
 - `save_qualification` - Saves your qualification decision (qualified/disqualified)
 - `get_stats` - Shows qualification statistics
+
+### Outreach Generation Tools
 - `get_profile_for_outreach` - Gets next qualified profile that needs outreach message
 - `save_outreach` - Saves personalized outreach message for a profile
+
+### Outreach Review Tools
+- `get_next_outreach_for_review` - Gets next outreach message to review (shows profile + message)
+- `approve_outreach` - Approves an outreach message as ready to send
+- `revise_outreach` - Revises an outreach message with new text
+
+### Contact Tracking Tools
 - `get_next_to_contact` - Gets next qualified profile to reach out to
 - `mark_contacted` - Marks profile as contacted with notes
 

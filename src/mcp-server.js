@@ -233,6 +233,113 @@ function saveOutreachMessage(profileName, outreachMessage) {
 }
 
 /**
+ * Get qualified profiles with outreach messages that haven't been approved
+ */
+function getQualifiedProfilesNeedingReview() {
+  const qualified = getQualifiedProfiles();
+  return qualified.filter(p => p.outreachMessage && !p.outreachApproved);
+}
+
+/**
+ * Get next outreach message that needs review
+ */
+function getNextOutreachForReview() {
+  const profiles = getQualifiedProfilesNeedingReview();
+  return profiles.length > 0 ? profiles[0] : null;
+}
+
+/**
+ * Approve outreach message for a profile
+ */
+function approveOutreach(profileName) {
+  const qualified = getQualifiedProfiles();
+  const profile = qualified.find(p => p.name === profileName);
+
+  if (!profile) {
+    throw new Error(`Qualified profile not found: ${profileName}`);
+  }
+
+  if (!profile.outreachMessage) {
+    throw new Error(`Profile "${profileName}" does not have an outreach message yet. Generate one first.`);
+  }
+
+  // Find the original file and update it
+  const qualifiedFiles = readdirSync(QUALIFIED_DIR).filter(f => f.endsWith('.json'));
+  let updated = false;
+
+  for (const file of qualifiedFiles) {
+    const filepath = join(QUALIFIED_DIR, file);
+    try {
+      const data = JSON.parse(readFileSync(filepath, 'utf8'));
+      if (data.name === profileName) {
+        // Approve the outreach
+        data.outreachApproved = true;
+        data.outreachApprovedAt = new Date().toISOString();
+        writeFileSync(filepath, JSON.stringify(data, null, 2));
+        updated = true;
+        break;
+      }
+    } catch (error) {
+      // Skip invalid files
+    }
+  }
+
+  if (!updated) {
+    throw new Error(`Could not update profile file for: ${profileName}`);
+  }
+
+  return { success: true, profileName, approvedAt: new Date().toISOString() };
+}
+
+/**
+ * Revise outreach message for a profile
+ */
+function reviseOutreach(profileName, newMessage) {
+  const qualified = getQualifiedProfiles();
+  const profile = qualified.find(p => p.name === profileName);
+
+  if (!profile) {
+    throw new Error(`Qualified profile not found: ${profileName}`);
+  }
+
+  if (!profile.outreachMessage) {
+    throw new Error(`Profile "${profileName}" does not have an outreach message yet. Generate one first.`);
+  }
+
+  // Find the original file and update it
+  const qualifiedFiles = readdirSync(QUALIFIED_DIR).filter(f => f.endsWith('.json'));
+  let updated = false;
+
+  for (const file of qualifiedFiles) {
+    const filepath = join(QUALIFIED_DIR, file);
+    try {
+      const data = JSON.parse(readFileSync(filepath, 'utf8'));
+      if (data.name === profileName) {
+        // Update the outreach message
+        data.outreachMessage = newMessage;
+        data.outreachGeneratedAt = new Date().toISOString();
+        // Clear approval since message changed
+        if (data.outreachApproved) {
+          delete data.outreachApproved;
+          delete data.outreachApprovedAt;
+        }
+        writeFileSync(filepath, JSON.stringify(data, null, 2));
+        updated = true;
+        break;
+      }
+    } catch (error) {
+      // Skip invalid files
+    }
+  }
+
+  if (!updated) {
+    throw new Error(`Could not update profile file for: ${profileName}`);
+  }
+
+  return { success: true, profileName, revisedAt: new Date().toISOString() };
+}
+
+/**
  * Get next unprocessed profile
  */
 function getNextUnqualifiedProfile() {
@@ -464,6 +571,47 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             },
           },
           required: ['profileName', 'outreachMessage'],
+        },
+      },
+      {
+        name: 'get_next_outreach_for_review',
+        description: 'Get the next outreach message that needs review. Shows profile summary, qualification analysis, and the outreach message. Use this to review messages before sending.',
+        inputSchema: {
+          type: 'object',
+          properties: {},
+          required: [],
+        },
+      },
+      {
+        name: 'approve_outreach',
+        description: 'Approve an outreach message after review. Marks the message as ready to send.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            profileName: {
+              type: 'string',
+              description: 'The exact name of the profile whose outreach message to approve',
+            },
+          },
+          required: ['profileName'],
+        },
+      },
+      {
+        name: 'revise_outreach',
+        description: 'Revise an outreach message with new text. Clears any previous approval since the message has changed.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            profileName: {
+              type: 'string',
+              description: 'The exact name of the profile whose outreach message to revise',
+            },
+            newMessage: {
+              type: 'string',
+              description: 'The revised outreach message text',
+            },
+          },
+          required: ['profileName', 'newMessage'],
         },
       },
       {
@@ -849,6 +997,143 @@ Profiles without outreach: ${withoutOutreachCount}`;
         const message = `✓ Outreach message saved for "${profileName}"
   Generated at: ${result.outreachGeneratedAt}
   Message length: ${outreachMessage.length} characters`;
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: message,
+            },
+          ],
+        };
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: 'text',
+              text: `Error: ${error.message}`,
+            },
+          ],
+          isError: true,
+        };
+      }
+    }
+
+    case 'get_next_outreach_for_review': {
+      const profile = getNextOutreachForReview();
+
+      if (!profile) {
+        return {
+          content: [
+            {
+              type: 'text',
+              text: 'No outreach messages need review. All messages have been reviewed!',
+            },
+          ],
+        };
+      }
+
+      const needingReviewCount = getQualifiedProfilesNeedingReview().length;
+
+      // Format profile data with qualification and outreach
+      const profileText = `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+OUTREACH MESSAGE REVIEW
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Profile: ${profile.name}
+Title: ${profile.title}
+Company: ${profile.company}
+Score: ${profile.qualification?.analysis?.score || 'N/A'}/100
+
+Qualification Summary:
+${profile.qualification?.analysis?.reasoning || 'N/A'}
+
+Strengths:
+${profile.qualification?.analysis?.strengths?.map(s => `  • ${s}`).join('\n') || 'N/A'}
+
+Recommended Approach:
+${profile.qualification?.analysis?.recommendedApproach || 'N/A'}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+OUTREACH MESSAGE:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+${profile.outreachMessage}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Messages remaining to review: ${needingReviewCount}
+
+Actions:
+  • To approve: use approve_outreach with profileName: "${profile.name}"
+  • To revise: use revise_outreach with profileName and newMessage
+  • To disqualify: move profile to disqualified folder manually or create new tool`;
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: profileText,
+          },
+        ],
+      };
+    }
+
+    case 'approve_outreach': {
+      const { profileName } = args;
+
+      try {
+        const result = approveOutreach(profileName);
+
+        const message = `✓ Outreach message approved for "${profileName}"
+  Approved at: ${result.approvedAt}
+
+This message is now ready to send!`;
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: message,
+            },
+          ],
+        };
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: 'text',
+              text: `Error: ${error.message}`,
+            },
+          ],
+          isError: true,
+        };
+      }
+    }
+
+    case 'revise_outreach': {
+      const { profileName, newMessage } = args;
+
+      try {
+        if (!newMessage || newMessage.trim().length === 0) {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: 'Error: Revised message cannot be empty',
+              },
+            ],
+            isError: true,
+          };
+        }
+
+        const result = reviseOutreach(profileName, newMessage);
+
+        const message = `✓ Outreach message revised for "${profileName}"
+  Revised at: ${result.revisedAt}
+  New message length: ${newMessage.length} characters
+
+Note: Any previous approval was cleared. Review and approve again if ready.`;
 
         return {
           content: [
