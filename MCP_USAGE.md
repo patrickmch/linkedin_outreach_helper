@@ -125,6 +125,41 @@ Here's how to qualify all 73 profiles from your CSV:
 4. **Decide**: "Use save_qualification with [details]"
 5. **Repeat**: Continue until all profiles are processed
 
+## Outreach Message Generation
+
+After qualifying profiles, generate personalized outreach messages:
+
+### 1. Load outreach guidelines from Google Doc
+**CRITICAL**: Open this document BEFORE starting: https://docs.google.com/document/d/1YbudVmUqeV5bIs6PFXk8aOCMWgEXJ_vOWqawuqtau94/edit?tab=t.0
+
+### 2. Get next profile for outreach
+```
+Use the get_profile_for_outreach tool
+```
+
+This returns a qualified profile with:
+- Profile details (name, title, company)
+- Qualification score and reasoning
+- Strengths and concerns
+- Recommended approach
+
+### 3. Generate personalized message
+Using the profile info and outreach guidelines, write a personalized connection request or message.
+
+### 4. Save the outreach message
+```
+Use the save_outreach tool with:
+- profileName: "John Carter"
+- outreachMessage: "Hi John, I noticed your work in..."
+```
+
+### 5. Repeat for next profile
+```
+Use the get_profile_for_outreach tool
+```
+
+---
+
 ## Available MCP Tools
 
 - `get_csv_info` - Shows which CSV file is loaded and profile count
@@ -132,6 +167,8 @@ Here's how to qualify all 73 profiles from your CSV:
 - `get_next_profile` - Returns next unqualified profile with full details
 - `save_qualification` - Saves your qualification decision (qualified/disqualified)
 - `get_stats` - Shows qualification statistics
+- `get_profile_for_outreach` - Gets next qualified profile that needs outreach message
+- `save_outreach` - Saves personalized outreach message for a profile
 - `get_next_to_contact` - Gets next qualified profile to reach out to
 - `mark_contacted` - Marks profile as contacted with notes
 
