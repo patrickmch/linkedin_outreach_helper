@@ -1,304 +1,436 @@
-# LinkedIn Outreach Helper
+# LinkedIn Outreach Automation
 
-An intelligent LinkedIn Sales Navigator scraper with AI-powered lead qualification using Claude API.
+AI-powered LinkedIn prospecting system with automated lead qualification, personalized outreach generation, and automated connection request sending via Heyreach.
+
+## What It Does
+
+Complete end-to-end LinkedIn prospecting automation:
+
+1. **Export** profiles from LinkedIn Sales Navigator to CSV
+2. **Qualify** leads with AI (Claude Desktop + MCP)
+3. **Generate** personalized outreach messages
+4. **Send** connection requests automatically via Heyreach
+5. **Track** connection acceptances via webhook
 
 ## Features
 
-- **Stealth Scraping**: Uses Puppeteer-extra with Stealth plugin to avoid detection
-- **Persistent Sessions**: Maintains Chrome profile and cookies to avoid re-login
-- **Rate Limiting**: Configurable daily limits (default: 80 profiles/day) with stats tracking
-- **Human-like Behavior**:
-  - Normal distribution delays (not uniform random)
-  - Random human actions (scrolling, mouse movements, checking notifications)
-  - 3-8 second delays between actions
-- **AI Lead Qualification**: Uses Claude API to automatically qualify leads based on your criteria
-- **Data Persistence**: Saves all profiles and qualified prospects to JSON files
-- **CLI Interface**: Easy-to-use commands for scraping, qualifying, and viewing stats
+- 🤖 **AI-Powered Qualification**: Uses Claude Desktop via MCP for intelligent lead scoring
+- ⚡ **Batch Processing**: Qualify 5 profiles at once for efficiency
+- ✍️ **Outreach Generation**: AI generates personalized connection request messages
+- 📝 **Message Review & Approval**: Review and refine messages before sending
+- 🚀 **Automatic Sending**: Qualified prospects automatically added to Heyreach campaign
+- 📊 **Progress Tracking**: Never process the same profile twice
+- 🔔 **Webhook Tracking**: Monitor connection acceptances in real-time
+- 💰 **Zero API Costs**: Uses Claude Desktop subscription (no additional Claude API fees)
 
-## Safety Features
+## Architecture
 
-- Runs with `headless: false` so you can monitor activity
-- Uses persistent Chrome profile with `userDataDir`
-- Limits to 80 profile views per day (configurable)
-- Random delays between 3-8 seconds using normal distribution
-- Saves cookies to avoid re-login
-- Tracks daily limits in stats file
-- Occasional random human actions to mimic real behavior
-
-## Installation
-
-1. Clone or navigate to the project directory:
-```bash
-cd linkedin-outreach-helper
+```
+LinkedIn Sales Navigator CSV Export
+  ↓
+Claude Desktop (MCP Tools)
+  ├─ Batch qualification (5 at a time)
+  ├─ AI scoring (0-100)
+  ├─ Save to qualified/disqualified
+  └─ **Auto-send to Heyreach** ✨
+  ↓
+Heyreach API
+  └─ Add to List 406467
+  ↓
+Heyreach Campaign
+  └─ Send connection requests via LinkedIn
+  ↓
+Webhook Server
+  └─ Track connection acceptances
 ```
 
-2. Install dependencies:
+## Quick Start
+
+### 1. Installation
+
 ```bash
+cd linkedin-outreach-helper
 npm install
 ```
 
-3. Configure your credentials:
-```bash
-cp config.template.json config.json
+### 2. Configuration
+
+Create `config.json`:
+
+```json
+{
+  "minScore": 60,
+  "heyreach": {
+    "apiKey": "your-heyreach-api-key",
+    "listId": "your-list-id",
+    "baseUrl": "https://api.heyreach.io/api/public"
+  }
+}
 ```
 
-4. Edit `config.json` and fill in:
-   - Your LinkedIn email and password
-   - Your Anthropic API key
-   - Your qualification criteria
-   - Daily limits (optional)
+### 3. Setup MCP in Claude Desktop
+
+Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "linkedin-outreach": {
+      "command": "node",
+      "args": ["/absolute/path/to/linkedin-outreach-helper/src/mcp-server.js"]
+    }
+  }
+}
+```
+
+Restart Claude Desktop.
+
+### 4. Prepare Qualification Criteria
+
+Create a Google Doc with your lead qualification criteria. You'll load this in Claude Desktop before qualifying.
+
+### 5. Export Profiles from LinkedIn
+
+1. Go to LinkedIn Sales Navigator
+2. Run your search with filters
+3. Export results to CSV
+4. Save to `~/Downloads` (MCP automatically finds most recent CSV)
+
+### 6. Qualify Leads in Claude Desktop
+
+Open Claude Desktop and say:
+
+```
+Load my qualification criteria from Google Drive, then get the next batch of 5 profiles to qualify
+```
+
+Claude will:
+- Get 5 profiles from your CSV
+- Show summary for quick screening
+- You identify obvious disqualifiers
+- Deep analysis on promising ones
+- Save all 5 (qualified or disqualified)
+- **Automatically send qualified prospects to Heyreach** ✨
+
+### 7. Generate Outreach Messages
+
+In Claude Desktop:
+
+```
+Load my outreach guidelines from Google Drive, then get the next profile for outreach
+```
+
+Claude will:
+- Get next qualified prospect without a message
+- Generate personalized outreach based on qualification analysis
+- Save message to prospect's JSON file
+
+### 8. Review & Approve Messages
+
+In Claude Desktop:
+
+```
+Get the next outreach message to review
+```
+
+Claude shows:
+- Profile summary
+- Qualification analysis
+- Generated outreach message
+
+You can:
+- Approve it: `approve_outreach for [name]`
+- Revise it: `revise_outreach for [name] with: [new message]`
+
+### 9. Monitor Results
+
+Heyreach automatically sends connection requests. Your webhook server (already configured) tracks acceptances.
+
+## Complete Workflow
+
+### Phase 1: Qualification (Claude Desktop)
+
+**Step 1:** Load qualification criteria from Google Drive
+
+**Step 2:** Get batch of 5 profiles
+```
+Use get_next_batch tool
+```
+
+**Step 3:** Quick screen for obvious disqualifiers
+- Incomplete profiles
+- Pure sales/marketing roles
+- Government/public sector
+- Enterprise (1000+ employees)
+- Solopreneurs
+
+**Step 4:** Deep analysis on promising ones
+- Analyze against full criteria
+- Score 0-100
+- Document reasoning, strengths, concerns
+
+**Step 5:** Save all 5
+```
+Use save_qualification tool for each profile
+```
+
+**Result:** Qualified prospects automatically sent to Heyreach! ✨
+
+**Step 6:** Repeat
+```
+Use get_next_batch tool
+```
+
+### Phase 2: Outreach Generation (Claude Desktop)
+
+**Step 1:** Load outreach guidelines from Google Drive
+https://docs.google.com/document/d/1YbudVmUqeV5bIs6PFXk8aOCMWgEXJ_vOWqawuqtau94/edit?tab=t.0
+
+**Step 2:** Get next profile for outreach
+```
+Use get_profile_for_outreach tool
+```
+
+**Step 3:** Generate personalized message
+Claude generates message based on:
+- Profile details
+- Qualification analysis
+- Your outreach guidelines
+
+**Step 4:** Save outreach
+```
+Use save_outreach tool
+```
+
+**Step 5:** Repeat until all qualified prospects have messages
+
+### Phase 3: Review & Approve (Claude Desktop)
+
+**Step 1:** Get next message to review
+```
+Use get_next_outreach_for_review tool
+```
+
+Shows formatted view with:
+- Profile summary
+- Qualification analysis
+- Generated message
+
+**Step 2:** Approve or revise
+```
+Use approve_outreach tool
+```
+OR
+```
+Use revise_outreach tool with new message
+```
+
+**Step 3:** Repeat until all messages approved
+
+### Phase 4: Sending & Tracking (Automatic)
+
+- ✅ Heyreach sends connection requests via LinkedIn
+- ✅ Webhook tracks acceptances
+- ✅ You follow up with approved prospects
+
+## Available MCP Tools
+
+### Qualification Tools
+- `get_csv_info` - Shows which CSV is loaded
+- `get_next_batch` - **[RECOMMENDED]** Get 5 profiles for batch processing
+- `get_next_profile` - Get single profile (slower)
+- `save_qualification` - Save qualification + auto-send to Heyreach
+- `get_stats` - Show qualification statistics
+
+### Outreach Generation Tools
+- `get_profile_for_outreach` - Get next qualified profile needing message
+- `save_outreach` - Save personalized outreach message
+
+### Outreach Review Tools
+- `get_next_outreach_for_review` - Get next message to review
+- `approve_outreach` - Approve message as ready to send
+- `revise_outreach` - Revise message with new text
+
+### Contact Tracking Tools
+- `get_next_to_contact` - Get next qualified profile
+- `mark_contacted` - Mark profile as contacted
 
 ## Configuration
 
-Edit `config.json` to customize:
+### config.json
 
-### LinkedIn Credentials
 ```json
-"linkedin": {
-  "email": "your-email@example.com",
-  "password": "your-password"
+{
+  "minScore": 60,
+  "heyreach": {
+    "apiKey": "your-api-key-here",
+    "listId": "your-list-id",
+    "baseUrl": "https://api.heyreach.io/api/public"
+  }
 }
 ```
 
-### Claude API Key
-```json
-"claude": {
-  "apiKey": "sk-ant-..."
-}
-```
+**minScore**: Minimum qualification score (0-100) to be considered qualified
 
-### Rate Limits
-```json
-"limits": {
-  "maxProfileViewsPerDay": 80,
-  "minDelaySeconds": 3,
-  "maxDelaySeconds": 8,
-  "delayStdDev": 1.5
-}
-```
+**heyreach.apiKey**: Your Heyreach API key (get from Heyreach dashboard)
 
-### Qualification Criteria
-Customize to match your ideal customer profile:
-```json
-"qualification": {
-  "criteria": [
-    "Works in B2B SaaS companies",
-    "Has decision-making authority (Director, VP, C-level)",
-    "Located in North America or Europe"
-  ],
-  "idealProfile": "Senior leaders in B2B SaaS...",
-  "disqualifiers": [
-    "Works in unrelated industries",
-    "Junior positions without authority"
-  ]
-}
-```
+**heyreach.listId**: The list ID that triggers your campaign
 
-## Usage
+**heyreach.baseUrl**: Heyreach API base URL (should not change)
 
-### 1. Test Login (Optional)
-Test your LinkedIn login and save the session:
-```bash
-npm run start login
-```
+### External Documents
 
-### 2. Scrape Profiles
-Scrape profiles from a Sales Navigator search:
+**Qualification Criteria**: Store in Google Drive for easy editing
 
-```bash
-npm run scrape -- --url "YOUR_SALES_NAV_URL" --number 20
-```
-
-**To get your Sales Navigator URL:**
-1. Go to LinkedIn Sales Navigator
-2. Perform a search with your filters
-3. Copy the URL from your browser
-4. Use that URL in the command above
-
-Example:
-```bash
-npm run scrape -- --url "https://www.linkedin.com/sales/search/people?query=(filters...)" --number 15
-```
-
-### 3. Qualify Leads
-
-#### Option A: MCP with Claude Code (Recommended - Automated & Free!)
-
-Fully automated qualification using Claude Code via MCP - **zero API costs, zero manual work!**
-
-1. **One-time setup**: Configure MCP in Claude Desktop (see `MCP_SETUP.md`)
-2. **In Claude Desktop, simply say**: "Qualify all my LinkedIn profiles using MCP tools"
-3. **Claude automatically**: Analyzes each profile, scores them, saves qualified leads
-
-**Benefits:**
-- ✅ Fully automated - no manual copy/paste
-- ✅ Zero API costs (included in Claude Pro)
-- ✅ Uses Claude Code intelligence
-- ✅ See `MCP_SETUP.md` for complete setup guide
-
-#### Option B: Manual Review (Testing & Refinement)
-
-Test without API costs using Claude Code:
-
-```bash
-# Export profiles to markdown
-npm run export
-
-# Review profiles one-by-one
-npm run review -- --index 1
-# Copy the prompt to Claude Code and get qualification feedback
-```
-
-**Benefits:**
-- No API costs during testing
-- Refine your criteria interactively
-- Learn what makes a good lead for your use case
-- See `MANUAL_REVIEW.md` for the complete workflow
-
-#### Option C: API Qualification
-
-Run AI qualification using Anthropic API:
-```bash
-npm run qualify
-```
-
-This will:
-- Analyze each profile using Claude API (~$0.003/profile)
-- Score each lead (0-100)
-- Determine if they match your criteria
-- Save qualified prospects to `data/qualified/`
-
-### 4. View Statistics
-Display your scraping and qualification stats:
-```bash
-npm run stats
-```
-
-Shows:
-- Today's profile views and remaining quota
-- Qualified vs disqualified counts
-- All-time statistics
-- Recent daily activity
-
-### 5. View Configuration
-Display your current configuration (with sensitive data masked):
-```bash
-npm run start config
-```
-
-### 6. Export for Manual Review
-Export all profiles to markdown format:
-```bash
-npm run export
-```
-
-Creates `data/profiles_for_review.md` with all profiles formatted for easy review.
-
-### 7. Review Individual Profiles
-Get qualification prompt for a specific profile:
-```bash
-npm run review -- --index 1
-```
-
-Perfect for manually reviewing profiles with Claude Code. The command outputs a formatted prompt you can copy and paste.
+**Outreach Guidelines**: Store in Google Drive
+- Template: https://docs.google.com/document/d/1YbudVmUqeV5bIs6PFXk8aOCMWgEXJ_vOWqawuqtau94/edit?tab=t.0
 
 ## Directory Structure
 
 ```
 linkedin-outreach-helper/
 ├── src/
-│   ├── index.js          # CLI interface
-│   ├── config.js         # Configuration loader
-│   ├── browser.js        # Browser automation
-│   ├── scraper.js        # LinkedIn scraping logic
-│   ├── qualifier.js      # Claude AI qualification
-│   ├── stats.js          # Statistics tracking
-│   └── utils.js          # Utility functions
+│   ├── mcp-server.js       # MCP server with all tools
+│   ├── csv-loader.js       # Auto-finds CSV in ~/Downloads
+│   ├── config.js           # Configuration loader
+│   ├── qualifier.js        # Prompt building utilities
+│   ├── heyreach-client.js  # Heyreach API integration
+│   └── webhook-server.js   # Connection acceptance tracking
 ├── data/
-│   ├── stats.json        # Daily statistics
-│   ├── cookies.json      # Saved session cookies
-│   └── qualified/        # Qualified prospects (JSON)
-├── profiles/             # All scraped profiles (JSON)
-├── chrome-profile/       # Persistent Chrome profile
-├── config.json           # Your configuration (not committed)
-├── config.template.json  # Configuration template
-└── package.json
+│   ├── qualified/          # Qualified prospects (JSON)
+│   └── disqualified/       # Disqualified prospects (JSON)
+├── config.json             # Your configuration
+└── MCP_USAGE.md           # Detailed MCP usage guide
 ```
 
-## How It Works
+## Profile JSON Structure
 
-### Scraping Process
-1. Launches Chrome with stealth plugin and persistent profile
-2. Loads saved cookies or logs in if needed
-3. Navigates to your Sales Navigator search URL
-4. Extracts profile data (name, title, company, location, experience, education)
-5. Saves each profile to `profiles/` directory
-6. Uses normal distribution for delays (3-8 seconds)
-7. Performs random human-like actions between profiles
-8. Tracks daily view count and respects limits
+Qualified profiles include complete tracking:
 
-### Qualification Process
-1. Loads all scraped profiles from `profiles/` directory
-2. For each profile, sends data to Claude API with your criteria
-3. Claude analyzes and scores the profile (0-100)
-4. Returns qualification decision with reasoning
-5. Saves qualified prospects to `data/qualified/`
-6. Updates statistics
+```json
+{
+  "name": "John Doe",
+  "title": "CEO",
+  "company": "Acme Corp",
+  "url": "https://linkedin.com/in/johndoe",
+  "qualification": {
+    "isQualified": true,
+    "analysis": {
+      "score": 85,
+      "reasoning": "Strong connector profile...",
+      "strengths": ["CEO/Partner", "Mid-market focus"],
+      "concerns": ["Location unknown"],
+      "recommendedApproach": "Position as technical partner..."
+    },
+    "qualifiedAt": "2025-11-05T..."
+  },
+  "heyreach": {
+    "sent": true,
+    "sentAt": "2025-11-05T...",
+    "heyreachId": "https://linkedin.com/in/johndoe",
+    "listId": "406467"
+  },
+  "outreachMessage": "Hey John, saw you're leading...",
+  "outreachGeneratedAt": "2025-11-05T...",
+  "outreachApproved": true,
+  "outreachApprovedAt": "2025-11-05T..."
+}
+```
 
-## Best Practices
+## Heyreach Integration
 
-1. **Start Small**: Test with 5-10 profiles before scaling up
-2. **Daily Limits**: Keep under 80 profiles/day to avoid LinkedIn flags
-3. **Use Sales Navigator**: Regular LinkedIn has stricter rate limits
-4. **Monitor First Run**: Watch the browser to ensure everything works
-5. **Refine Criteria**: Adjust qualification criteria based on results
-6. **Regular Sessions**: Run daily rather than bulk scraping
-7. **Check Stats**: Monitor your stats regularly with `npm run stats`
+When you qualify a prospect (score ≥ minScore), the system **automatically**:
 
-## Safety & Ethics
+1. Saves to `data/qualified/`
+2. Calls Heyreach API: `POST /list/AddLeadsToListV2`
+3. Adds prospect to list 406467
+4. List update triggers campaign
+5. Heyreach sends connection request via LinkedIn
 
-This tool is for legitimate lead generation purposes only:
+**If send succeeds:**
+```
+✓ Profile "John Doe" saved as QUALIFIED (score: 85/100)
+  ✓ Sent to Heyreach campaign
+```
 
-- ✅ Use for B2B outreach to qualified prospects
-- ✅ Respect LinkedIn's terms of service
-- ✅ Keep within reasonable rate limits
-- ✅ Use with Sales Navigator (designed for sales activities)
-- ❌ Don't use for spam or mass messaging
-- ❌ Don't exceed reasonable daily limits
-- ❌ Don't scrape personal data for unauthorized purposes
+**If send fails:**
+```
+✓ Profile "John Doe" saved as QUALIFIED (score: 85/100)
+  ✗ Failed to send to Heyreach (will retry later)
+```
 
-**Remember**: This tool should be used responsibly and in compliance with LinkedIn's terms of service and applicable laws.
+**Failed sends are detected:**
+
+When you start a batch, Claude Desktop alerts you:
+```
+⚠️ WARNING: 2 qualified profile(s) failed to send to Heyreach:
+  • Jane Smith - Heyreach API error (500): ...
+  • Bob Jones - LinkedIn profile URL is required
+
+Would you like me to retry sending these to Heyreach?
+```
 
 ## Troubleshooting
 
-### "Daily limit reached"
-Wait until the next day, or increase `maxProfileViewsPerDay` in config.json (not recommended above 80).
+### No profiles returned
+- Check CSV exists in `~/Downloads`
+- Verify CSV is from LinkedIn Sales Navigator export
+- Use `get_csv_info` tool to see what's loaded
 
-### "Login failed"
-1. Check your credentials in config.json
-2. Try the `npm run start login` command to test
-3. Complete any verification challenges in the browser
-4. LinkedIn may require 2FA - complete it in the browser window
+### Heyreach send failures
+- Verify API key is correct in config.json
+- Check listId exists in your Heyreach account
+- Ensure profile has valid LinkedIn URL
+- Check MCP server logs for detailed error
 
-### "No profiles found"
-1. Verify your Sales Navigator search URL is correct
-2. Make sure you're logged into Sales Navigator (not just regular LinkedIn)
-3. Check that your search has results
+### MCP server not connecting
+- Verify path in `claude_desktop_config.json` is absolute
+- Restart Claude Desktop after config changes
+- Check `node` command works in terminal
+- Test server: `npm run mcp`
 
-### Chrome profile errors
-Delete the `chrome-profile/` directory and try again:
-```bash
-rm -rf chrome-profile/
-```
+### Qualification criteria not loading
+- Make sure Google Drive document is open
+- Tell Claude Desktop to load the document first
+- Verify you have access to the document
 
 ## API Costs
 
-This tool uses the Claude API for lead qualification:
-- Model: claude-3-5-sonnet-20241022
-- Cost: ~$0.003 per profile qualification
-- 100 profiles ≈ $0.30
+**Zero Claude API costs!** This system uses:
+- Claude Desktop subscription (included with Claude Pro)
+- MCP tools (no API calls)
+- Heyreach API (part of Heyreach subscription)
 
-Monitor your usage at: https://console.anthropic.com/
+No additional API fees for qualification, outreach generation, or review!
+
+## Best Practices
+
+1. **Batch Qualification**: Use `get_next_batch` for 5 at a time (much faster)
+2. **Quick Screening**: Identify obvious disqualifiers upfront
+3. **Deep Analysis**: Only analyze promising profiles in detail
+4. **External Criteria**: Keep qualification criteria in Google Drive for easy updates
+5. **Review Messages**: Always review and approve outreach before Heyreach sends
+6. **Monitor Results**: Check Heyreach dashboard and webhook logs regularly
+7. **Iterate**: Refine criteria and outreach based on acceptance rates
+
+## Safety & Ethics
+
+This tool is for legitimate B2B lead generation:
+
+- ✅ Use for qualified B2B outreach
+- ✅ Personalize every message
+- ✅ Respect LinkedIn's terms of service
+- ✅ Monitor response rates and adjust
+- ❌ Don't spam or send generic messages
+- ❌ Don't scrape for unauthorized purposes
+- ❌ Don't exceed reasonable outreach limits
+
+**Remember**: Quality over quantity. Target the right prospects with personalized, relevant outreach.
+
+## Documentation
+
+- **MCP_USAGE.md** - Complete MCP tools usage guide
+- **CLAUDE.md** - Technical documentation for Claude Code
 
 ## License
 
@@ -306,4 +438,4 @@ MIT
 
 ## Disclaimer
 
-This tool is provided as-is for legitimate lead generation purposes. Users are responsible for complying with LinkedIn's terms of service and all applicable laws. The authors assume no liability for misuse.
+This tool is provided for legitimate lead generation purposes. Users are responsible for complying with LinkedIn's and Heyreach's terms of service and all applicable laws.
