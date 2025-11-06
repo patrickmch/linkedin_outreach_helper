@@ -11,6 +11,7 @@ import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { config } from './config.js';
 import { loadAllProfiles, findMostRecentCSV } from './csv-loader.js';
+import { addProspectToCampaign, getFailedHeyreachSends } from './heyreach-client.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -364,7 +365,7 @@ function getUnqualifiedCount() {
 /**
  * Save qualification result
  */
-function saveQualification(profileName, qualificationData) {
+async function saveQualification(profileName, qualificationData) {
   const allProfiles = loadAllProfiles();
   const profile = allProfiles.find(p => p.name === profileName);
 
@@ -397,9 +398,39 @@ function saveQualification(profileName, qualificationData) {
       }
     };
 
+    // Try to send to Heyreach automatically
+    if (config.heyreach && config.heyreach.apiKey) {
+      try {
+        console.error(`Sending ${profileName} to Heyreach...`);
+        const heyreachResult = await addProspectToCampaign(profile);
+
+        prospect.heyreach = {
+          sent: true,
+          sentAt: new Date().toISOString(),
+          heyreachId: heyreachResult.heyreachId,
+          listId: config.heyreach.listId
+        };
+
+        console.error(`✓ Successfully sent ${profileName} to Heyreach (ID: ${heyreachResult.heyreachId})`);
+      } catch (error) {
+        console.error(`✗ Failed to send ${profileName} to Heyreach: ${error.message}`);
+
+        prospect.heyreach = {
+          sent: false,
+          error: error.message,
+          attemptedAt: new Date().toISOString()
+        };
+      }
+    }
+
     writeFileSync(filepath, JSON.stringify(prospect, null, 2));
 
-    return { saved: true, filepath, qualified: true };
+    return {
+      saved: true,
+      filepath,
+      qualified: true,
+      heyreachSent: prospect.heyreach?.sent || false
+    };
   } else {
     // Save to disqualified directory
     ensureDisqualifiedDir();
@@ -711,8 +742,20 @@ Profiles remaining: ${unqualifiedCount}`;
         reminder = `🚨 CRITICAL REMINDER: Load your qualification criteria from Google Drive RIGHT NOW before analyzing!\n\n`;
       }
 
+      // Check for failed Heyreach sends
+      const qualifiedProfiles = getQualifiedProfiles();
+      const failedSends = getFailedHeyreachSends(qualifiedProfiles);
+      let failedSendsWarning = '';
+      if (failedSends.length > 0 && isFirstBatch) {
+        failedSendsWarning = `⚠️  WARNING: ${failedSends.length} qualified profile(s) failed to send to Heyreach:\n`;
+        failedSends.forEach(p => {
+          failedSendsWarning += `  • ${p.name} - ${p.heyreach.error}\n`;
+        });
+        failedSendsWarning += `\nWould you like me to retry sending these to Heyreach?\n\n`;
+      }
+
       // Format batch nicely
-      let batchText = `${reminder}Batch of ${batch.length} profiles (${unqualifiedCount} remaining):\n\n`;
+      let batchText = `${reminder}${failedSendsWarning}Batch of ${batch.length} profiles (${unqualifiedCount} remaining):\n\n`;
       batchText += `PROCESS:\n`;
       batchText += `1. Quick screen for obvious disqualifiers (incomplete, pure sales, government, etc)\n`;
       batchText += `2. Deep analysis ONLY on promising ones\n`;
@@ -793,7 +836,7 @@ Profiles remaining: ${unqualifiedCount}`;
           };
         }
 
-        const result = saveQualification(profileName, {
+        const result = await saveQualification(profileName, {
           qualified,
           score,
           reasoning,
@@ -802,9 +845,16 @@ Profiles remaining: ${unqualifiedCount}`;
           recommendedApproach
         });
 
-        const message = result.qualified
+        let message = result.qualified
           ? `✓ Profile "${profileName}" saved as QUALIFIED (score: ${score}/100)\n  Location: ${result.filepath}`
           : `✗ Profile "${profileName}" saved as DISQUALIFIED (score: ${score}/100)\n  Location: ${result.filepath}`;
+
+        // Add Heyreach status if qualified
+        if (result.qualified && result.heyreachSent !== undefined) {
+          message += result.heyreachSent
+            ? `\n  ✓ Sent to Heyreach campaign`
+            : `\n  ✗ Failed to send to Heyreach (will retry later)`;
+        }
 
         return {
           content: [

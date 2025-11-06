@@ -23,7 +23,8 @@ export function loadConfig() {
     const config = JSON.parse(configData);
 
     return {
-      minScore: config.minScore || 60
+      minScore: config.minScore || 60,
+      heyreach: config.heyreach || null
     };
   } catch (error) {
     console.error('Error loading config.json:', error.message);

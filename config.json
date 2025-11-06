@@ -1,3 +1,8 @@
 {
-  "minScore": 60
+  "minScore": 60,
+  "heyreach": {
+    "apiKey": "2yBW9A9qRDMI092vmlNiMSZOzg/sJOletD3n+oHPWPk=",
+    "listId": "406467",
+    "baseUrl": "https://api.heyreach.io/api/public"
+  }
 }
