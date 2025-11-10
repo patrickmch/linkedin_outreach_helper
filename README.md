@@ -10,7 +10,8 @@ Complete end-to-end LinkedIn prospecting automation:
 2. **Qualify** leads with AI (Claude Desktop + MCP)
 3. **Generate** personalized outreach messages
 4. **Send** connection requests automatically via Heyreach
-5. **Track** connection acceptances via webhook
+5. **Track** connection acceptances via polling
+6. **Follow up** with manual messaging (API limitation)
 
 ## Features
 
@@ -20,7 +21,7 @@ Complete end-to-end LinkedIn prospecting automation:
 - 📝 **Message Review & Approval**: Review and refine messages before sending
 - 🚀 **Automatic Sending**: Qualified prospects automatically added to Heyreach campaign
 - 📊 **Progress Tracking**: Never process the same profile twice
-- 🔔 **Webhook Tracking**: Monitor connection acceptances in real-time
+- 🔔 **Connection Tracking**: Poll Heyreach API to track accepted connections
 - 💰 **Zero API Costs**: Uses Claude Desktop subscription (no additional Claude API fees)
 
 ## Architecture
@@ -40,8 +41,11 @@ Heyreach API
 Heyreach Campaign
   └─ Send connection requests via LinkedIn
   ↓
-Webhook Server
-  └─ Track connection acceptances
+Connection Acceptance Tracking (Manual)
+  └─ Run check-acceptances.js to poll Heyreach API
+  ↓
+Follow-up Messages (Manual)
+  └─ Send messages via LinkedIn or Heyreach UI
 ```
 
 ## Quick Start
@@ -142,9 +146,21 @@ You can:
 - Approve it: `approve_outreach for [name]`
 - Revise it: `revise_outreach for [name] with: [new message]`
 
-### 9. Monitor Results
+### 9. Track Connection Acceptances
 
-Heyreach automatically sends connection requests. Your webhook server (already configured) tracks acceptances.
+Heyreach automatically sends connection requests. Check for acceptances:
+
+```bash
+node check-acceptances.js
+```
+
+This polls the Heyreach API and updates profiles with `connectionAccepted: true`.
+
+### 10. Send Follow-up Messages (Manual)
+
+**Note**: Automated message sending is not supported by Heyreach API. You must:
+- Send follow-up messages manually via LinkedIn or Heyreach UI
+- Reference the approved outreach messages saved in profile JSONs
 
 ## Complete Workflow
 
@@ -227,11 +243,28 @@ Use revise_outreach tool with new message
 
 **Step 3:** Repeat until all messages approved
 
-### Phase 4: Sending & Tracking (Automatic)
+### Phase 4: Connection Requests (Automatic)
 
 - ✅ Heyreach sends connection requests via LinkedIn
-- ✅ Webhook tracks acceptances
-- ✅ You follow up with approved prospects
+- ✅ Connection requests include approved messages (if configured in Heyreach)
+
+### Phase 5: Track Acceptances (Manual)
+
+Run periodically to check for accepted connections:
+```bash
+node check-acceptances.js
+```
+
+This updates profile JSONs with `connectionAccepted: true` status.
+
+### Phase 6: Follow-up Messages (Manual)
+
+**Important**: Heyreach API doesn't support automated message sending to new connections.
+
+**Workaround**:
+1. Check which profiles have `connectionAccepted: true`
+2. Reference their approved `outreachMessage` in profile JSON
+3. Send messages manually via LinkedIn or Heyreach UI
 
 ## Available MCP Tools
 
@@ -250,10 +283,6 @@ Use revise_outreach tool with new message
 - `get_next_outreach_for_review` - Get next message to review
 - `approve_outreach` - Approve message as ready to send
 - `revise_outreach` - Revise message with new text
-
-### Contact Tracking Tools
-- `get_next_to_contact` - Get next qualified profile
-- `mark_contacted` - Mark profile as contacted
 
 ## Configuration
 
@@ -290,17 +319,19 @@ Use revise_outreach tool with new message
 ```
 linkedin-outreach-helper/
 ├── src/
-│   ├── mcp-server.js       # MCP server with all tools
-│   ├── csv-loader.js       # Auto-finds CSV in ~/Downloads
-│   ├── config.js           # Configuration loader
-│   ├── qualifier.js        # Prompt building utilities
-│   ├── heyreach-client.js  # Heyreach API integration
-│   └── webhook-server.js   # Connection acceptance tracking
+│   ├── mcp-server.js         # MCP server with all tools
+│   ├── csv-loader.js         # Auto-finds CSV in ~/Downloads
+│   ├── config.js             # Configuration loader
+│   ├── heyreach-client.js    # Heyreach API integration
+│   ├── acceptance-tracker.js # Connection acceptance polling
+│   └── message-sender.js     # Message sending (not functional)
+├── check-acceptances.js      # Script to check accepted connections
+├── batch-send.js             # Script to retry failed sends
 ├── data/
-│   ├── qualified/          # Qualified prospects (JSON)
-│   └── disqualified/       # Disqualified prospects (JSON)
-├── config.json             # Your configuration
-└── MCP_USAGE.md           # Detailed MCP usage guide
+│   ├── qualified/            # Qualified prospects (JSON)
+│   └── disqualified/         # Disqualified prospects (JSON)
+├── config.json               # Your configuration
+└── MCP_USAGE.md              # Detailed MCP usage guide
 ```
 
 ## Profile JSON Structure
@@ -333,7 +364,10 @@ Qualified profiles include complete tracking:
   "outreachMessage": "Hey John, saw you're leading...",
   "outreachGeneratedAt": "2025-11-05T...",
   "outreachApproved": true,
-  "outreachApprovedAt": "2025-11-05T..."
+  "outreachApprovedAt": "2025-11-05T...",
+  "connectionAccepted": true,
+  "connectionAcceptedAt": "2025-11-05T...",
+  "heyreachLeadId": 122319124
 }
 ```
 
