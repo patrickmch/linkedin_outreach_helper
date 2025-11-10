@@ -654,6 +654,24 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           required: [],
         },
       },
+      {
+        name: 'list_heyreach_methods',
+        description: 'Get a complete list of all available Heyreach API operations organized by category - call this first to understand what methods are available',
+        inputSchema: {
+          type: 'object',
+          properties: {},
+          required: [],
+        },
+      },
+      {
+        name: 'get_heyreach_quick_start',
+        description: 'Get common Heyreach workflow patterns and step-by-step guides for typical tasks like sending messages, getting leads, checking conversations, etc.',
+        inputSchema: {
+          type: 'object',
+          properties: {},
+          required: [],
+        },
+      },
     ],
   };
 });
@@ -1237,6 +1255,264 @@ Note: Any previous approval was cleared. Review and approve again if ready.`;
           isError: true,
         };
       }
+    }
+
+    case 'list_heyreach_methods': {
+      const methodsList = `# Heyreach API Methods Reference
+
+## CAMPAIGNS
+- **GetLeadsFromCampaign**
+  Description: Fetch leads from a specific campaign with pagination support
+  Parameters: campaignId (integer), offset (integer), limit (integer), timeFilter (string)
+  Returns: { totalCount, items: [lead objects with status, profile data, etc.] }
+  Key Fields: id, linkedInUserProfileId, leadCampaignStatus, leadConnectionStatus, leadMessageStatus
+
+## INBOX / MESSAGING
+- **GetConversationsV2**
+  Description: Get LinkedIn conversations for your account
+  Parameters: linkedinId (string - linkedInUserProfileId), linkedInAccountId (integer, optional)
+  Returns: { totalCount, items: [conversation objects] }
+  Note: Only returns conversations that already exist; empty for new connections
+
+- **SendMessage**
+  Description: Send a message to an existing LinkedIn conversation
+  Parameters: message (string), conversationId (string), linkedInAccountId (integer), subject (string, optional)
+  Returns: Success/error response
+  ⚠️  LIMITATION: Requires existing conversationId - cannot send FIRST message to new connections via API
+
+## LISTS
+- **AddLeadsToListV2**
+  Description: Add leads/prospects to a Heyreach list (which can trigger campaigns)
+  Parameters: leads (array of lead objects), listId (integer)
+  Lead Object: { firstName, lastName, location, summary, companyName, position, about, emailAddress, profileUrl }
+  Returns: Success response with lead IDs
+  Use Case: Add qualified prospects to trigger automated connection requests
+
+## WEBHOOKS
+- **Connection Request Sent** (webhook event)
+  Event Type: connection_request_sent
+  Triggered: When Heyreach sends a LinkedIn connection request
+  Payload: lead data, campaign info, sender info
+
+- **Connection Request Accepted** (webhook event)
+  Event Type: connection_request_accepted
+  Triggered: When a prospect accepts your connection request
+  Payload: lead data, campaign info, timestamp
+  Detection: Check lead.leadConnectionStatus === "ConnectionAccepted"
+
+## STATUS FIELD VALUES
+
+**leadCampaignStatus:**
+- "InSequence" - Lead is currently being processed in campaign
+- "Finished" - Campaign sequence completed for this lead
+- "Paused" - Campaign paused
+- "Failed" - Campaign failed for this lead
+
+**leadConnectionStatus:**
+- "None" - No connection request sent yet
+- "ConnectionSent" - Connection request sent, awaiting response
+- "ConnectionAccepted" - Connection request accepted ✓
+- "ConnectionRejected" - Connection request declined
+- "AlreadyConnected" - Already connected on LinkedIn
+
+**leadMessageStatus:**
+- "None" - No messages sent
+- "MessageSent" - Message(s) sent
+- "MessageFailed" - Message delivery failed
+
+## COMMON IDENTIFIERS
+- **linkedInUserProfileId**: LinkedIn's internal profile ID (e.g., "ACoAAF611OI...")
+  - Used for API calls like GetConversationsV2
+  - Unique identifier for each LinkedIn profile
+
+- **linkedInAccountId**: Your LinkedIn sender account ID (integer, e.g., 123010)
+  - Required for most inbox/messaging operations
+  - Identifies which LinkedIn account you're sending from
+
+- **campaignId**: Heyreach campaign ID (integer)
+  - Used to fetch leads, check status
+
+- **listId**: Heyreach list ID (integer)
+  - Used when adding new leads
+  - Lists can be linked to campaigns for automation`;
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: methodsList,
+          },
+        ],
+      };
+    }
+
+    case 'get_heyreach_quick_start': {
+      const quickStartGuide = `# Heyreach Quick Start Guide - Common Workflows
+
+## Workflow 1: Add Qualified Prospects to Campaign
+**Goal:** Send connection requests to qualified prospects
+
+**Steps:**
+1. Have qualified profile data ready with:
+   - firstName, lastName
+   - LinkedIn profileUrl
+   - company, title (position)
+   - location, about/summary
+
+2. Call AddLeadsToListV2:
+   POST /list/AddLeadsToListV2
+   Body: { leads: [leadObject], listId: 406467 }
+
+3. Campaign automatically triggers based on list configuration
+   - Heyreach sends connection requests
+   - You can check status via GetLeadsFromCampaign
+
+**Current Implementation:**
+- batch-send.js script handles this
+- Reads from data/qualified/
+- Sends up to N profiles at once
+
+## Workflow 2: Track Accepted Connections
+**Goal:** Find out which prospects accepted your connection requests
+
+**Steps:**
+1. Call GetLeadsFromCampaign:
+   POST /campaign/GetLeadsFromCampaign
+   Body: { campaignId: 255524, offset: 0, limit: 100, timeFilter: "Everywhere" }
+
+2. Filter response for accepted connections:
+   leads.filter(lead => lead.leadConnectionStatus === "ConnectionAccepted")
+
+3. Extract profile data from each accepted lead:
+   - lead.linkedInUserProfile.profileUrl (match to your profiles)
+   - lead.linkedInUserProfileId (for future messaging)
+   - lead.id (Heyreach lead ID)
+
+**Current Implementation:**
+- check-acceptances.js script does this
+- Matches accepted leads to qualified profiles by LinkedIn URL
+- Updates profile JSONs with connectionAccepted status
+
+## Workflow 3: Send Message to Accepted Connection
+**Goal:** Send a personalized message after connection is accepted
+
+⚠️  **CURRENT LIMITATION:** This workflow is blocked by API constraints
+
+**Attempted Steps:**
+1. Get linkedInUserProfileId from accepted lead (from Workflow 2)
+
+2. Try to get conversationId:
+   POST /inbox/GetConversationsV2
+   Body: { linkedinId: linkedInUserProfileId }
+
+   PROBLEM: Returns empty { totalCount: 0, items: [] } for new connections
+
+3. Try to send message:
+   POST /inbox/SendMessage
+   Body: { message: "text", conversationId: "???", linkedInAccountId: 123010 }
+
+   PROBLEM: No conversationId available, API returns 404 "conversation does not exist"
+
+**Root Cause:**
+- SendMessage API only works with EXISTING conversations
+- New connections don't have conversationId until first message is manually sent
+- No API endpoint discovered for sending FIRST message to new connections
+
+**Current Workaround:**
+- Send first messages manually through Heyreach UI
+- Once conversation exists, API can be used for follow-up messages
+
+## Workflow 4: Check Campaign Lead Status
+**Goal:** Monitor campaign progress and lead statuses
+
+**Steps:**
+1. Call GetLeadsFromCampaign with pagination:
+   POST /campaign/GetLeadsFromCampaign
+   Body: { campaignId: yourCampaignId, offset: 0, limit: 100, timeFilter: "Everywhere" }
+
+2. Parse response to check statuses:
+   - Count by leadConnectionStatus (sent, accepted, rejected)
+   - Count by leadCampaignStatus (in sequence, finished, failed)
+   - Check leadMessageStatus (none, sent, failed)
+
+3. If totalCount > limit, paginate:
+   - Increment offset by limit
+   - Repeat until you've fetched all leads
+
+**Response Structure:**
+{
+  "totalCount": 17,
+  "items": [
+    {
+      "id": 123813144,
+      "linkedInUserProfileId": "ACoAAA...",
+      "linkedInUserProfile": { profileUrl, firstName, lastName, company, ... },
+      "leadCampaignStatus": "Finished",
+      "leadConnectionStatus": "ConnectionSent",
+      "leadMessageStatus": "None",
+      "linkedInSenderId": 123010
+    },
+    ...
+  ]
+}
+
+## Workflow 5: Match Heyreach Leads to Your Profiles
+**Goal:** Connect Heyreach data back to your local profile JSONs
+
+**Steps:**
+1. Fetch campaign leads (Workflow 4)
+
+2. For each lead, extract LinkedIn URL:
+   linkedinUrl = lead.linkedInUserProfile.profileUrl
+
+3. Load your local profile JSONs from data/qualified/
+
+4. Match by URL (normalize by removing trailing slashes):
+   normalizedLeadUrl = linkedinUrl.replace(/\/$/, '')
+   profile.url.replace(/\/$/, '') === normalizedLeadUrl
+
+5. Update profile JSON with Heyreach data:
+   - lead.id → profile.heyreachLeadId
+   - lead.linkedInUserProfileId → profile.linkedInUserProfileId
+   - Connection status, timestamps, etc.
+
+**Current Implementation:**
+- acceptance-tracker.js does this matching
+- Updates qualified profiles with acceptance data
+
+## Configuration Reference
+
+**Required Config (config.json):**
+\`\`\`json
+{
+  "heyreach": {
+    "apiKey": "your-api-key",
+    "listId": "406467",
+    "campaignId": "255524",
+    "linkedInAccountId": 123010,
+    "baseUrl": "https://api.heyreach.io/api/public"
+  }
+}
+\`\`\`
+
+**API Authentication:**
+All requests require header: X-API-KEY: <your-api-key>
+Content-Type: application/json
+
+## Known Limitations
+1. Cannot send FIRST message via API - must use Heyreach UI
+2. GetConversationsV2 returns empty for new connections
+3. No webhook for "message sent" status updates
+4. Cannot create conversations programmatically`;
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: quickStartGuide,
+          },
+        ],
+      };
     }
 
     default:
