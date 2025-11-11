@@ -165,17 +165,17 @@ Get the next connected profile
 ```
 
 Claude will:
-- Get next accepted connection needing follow-up
-- Generate personalized follow-up message based on qualification
+- Get next accepted connection needing post-connection message
+- Generate personalized post-connection message based on qualification
 - You approve the message
-- Save with: `save_followup_message for [name] with: [message]`
+- Save with: `save_post_connection_message for [name] with: [message]`
 - Profile marked as `outreachSent: true`
 
-### 11. Send Follow-up Messages (Manual)
+### 11. Send Post-Connection Messages (Manual)
 
 **Manual Process**:
 - Review profile JSONs in `data/qualified/`
-- Copy `followupMessage` text from profiles with `connectionAccepted: true`
+- Copy `postConnectionMessage` text from profiles with `connectionAccepted: true`
 - Send messages manually via LinkedIn or Heyreach UI
 - API limitation: Cannot automate first message to new connections
 
@@ -214,58 +214,11 @@ Use save_qualification tool for each profile
 Use get_next_batch tool
 ```
 
-### Phase 2: Outreach Generation (Claude Desktop)
-
-**Step 1:** Load outreach guidelines from Google Drive
-https://docs.google.com/document/d/1YbudVmUqeV5bIs6PFXk8aOCMWgEXJ_vOWqawuqtau94/edit?tab=t.0
-
-**Step 2:** Get next profile for outreach
-```
-Use get_profile_for_outreach tool
-```
-
-**Step 3:** Generate personalized message
-Claude generates message based on:
-- Profile details
-- Qualification analysis
-- Your outreach guidelines
-
-**Step 4:** Save outreach
-```
-Use save_outreach tool
-```
-
-**Step 5:** Repeat until all qualified prospects have messages
-
-### Phase 3: Review & Approve (Claude Desktop)
-
-**Step 1:** Get next message to review
-```
-Use get_next_outreach_for_review tool
-```
-
-Shows formatted view with:
-- Profile summary
-- Qualification analysis
-- Generated message
-
-**Step 2:** Approve or revise
-```
-Use approve_outreach tool
-```
-OR
-```
-Use revise_outreach tool with new message
-```
-
-**Step 3:** Repeat until all messages approved
-
-### Phase 4: Connection Requests (Automatic)
+### Phase 2: Connection Requests (Automatic)
 
 - ✅ Heyreach sends connection requests via LinkedIn
-- ✅ Connection requests include approved messages (if configured in Heyreach)
 
-### Phase 5: Track Acceptances (Manual)
+### Phase 3: Track Acceptances (Manual)
 
 Run periodically to check for accepted connections:
 ```bash
@@ -274,32 +227,32 @@ node check-acceptances.js
 
 This updates profile JSONs with `connectionAccepted: true` and `outreachSent: false`.
 
-### Phase 6: Follow-up Message Generation (Claude Desktop)
+### Phase 4: Post-Connection Message Generation (Claude Desktop)
 
 **Step 1:** Get next connected profile
 ```
 Use get_next_connected_profile tool
 ```
 
-**Step 2:** Generate personalized follow-up
+**Step 2:** Generate personalized post-connection message
 Claude generates message based on:
 - Profile details
 - Qualification analysis
 - Connection context
 
-**Step 3:** Save follow-up message
+**Step 3:** Save post-connection message
 ```
-Use save_followup_message tool
+Use save_post_connection_message tool
 ```
 Profile marked as `outreachSent: true`
 
-**Step 4:** Repeat until all connected profiles have follow-up messages
+**Step 4:** Repeat until all connected profiles have post-connection messages
 
-### Phase 7: Send Follow-up Messages (Manual)
+### Phase 5: Send Post-Connection Messages (Manual)
 
 **Manual Process Required**:
 1. Check profile JSONs in `data/qualified/` for `connectionAccepted: true`
-2. Copy `followupMessage` text from each profile
+2. Copy `postConnectionMessage` text from each profile
 3. Send messages manually via LinkedIn or Heyreach UI
 4. API limitation: Heyreach cannot automate first message to new connections
 
@@ -312,18 +265,14 @@ Profile marked as `outreachSent: true`
 - `save_qualification` - Save qualification + auto-send to Heyreach
 - `get_stats` - Show qualification statistics
 
-### Outreach Generation Tools
-- `get_profile_for_outreach` - Get next qualified profile needing message
-- `save_outreach` - Save personalized outreach message
-
 ### Outreach Review Tools
 - `get_next_outreach_for_review` - Get next message to review
 - `approve_outreach` - Approve message as ready to send
 - `revise_outreach` - Revise message with new text
 
-### Follow-up Outreach Tools
-- `get_next_connected_profile` - Get next accepted connection needing follow-up
-- `save_followup_message` - Save follow-up message and mark as sent
+### Post-Connection Outreach Tools
+- `get_next_connected_profile` - Get next accepted connection needing post-connection message
+- `save_post_connection_message` - Save post-connection message and mark as sent
 
 ## Configuration
 
@@ -410,8 +359,8 @@ Qualified profiles include complete tracking:
   "connectionAcceptedAt": "2025-11-05T...",
   "heyreachLeadId": 122319124,
   "outreachSent": false,
-  "followupMessage": "Hi John, thanks for connecting! I wanted to...",
-  "followupSentAt": "2025-11-10T..."
+  "postConnectionMessage": "Hi John, thanks for connecting! I wanted to...",
+  "postConnectionMessageSentAt": "2025-11-10T..."
 }
 ```
 

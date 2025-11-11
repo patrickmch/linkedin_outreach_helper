@@ -115,65 +115,6 @@ function getQualifiedProfiles() {
 }
 
 /**
- * Get qualified profiles without outreach messages
- */
-function getQualifiedProfilesWithoutOutreach() {
-  const qualified = getQualifiedProfiles();
-  return qualified.filter(p => !p.outreachMessage);
-}
-
-/**
- * Get next qualified profile that needs outreach message
- */
-function getNextProfileForOutreach() {
-  const profiles = getQualifiedProfilesWithoutOutreach();
-  return profiles.length > 0 ? profiles[0] : null;
-}
-
-/**
- * Save outreach message to qualified profile
- */
-function saveOutreachMessage(profileName, outreachMessage) {
-  const qualified = getQualifiedProfiles();
-  const profile = qualified.find(p => p.name === profileName);
-
-  if (!profile) {
-    throw new Error(`Qualified profile not found: ${profileName}`);
-  }
-
-  if (profile.outreachMessage) {
-    throw new Error(`Profile "${profileName}" already has an outreach message. Cannot overwrite.`);
-  }
-
-  // Find the original file and update it
-  const qualifiedFiles = readdirSync(QUALIFIED_DIR).filter(f => f.endsWith('.json'));
-  let updated = false;
-
-  for (const file of qualifiedFiles) {
-    const filepath = join(QUALIFIED_DIR, file);
-    try {
-      const data = JSON.parse(readFileSync(filepath, 'utf8'));
-      if (data.name === profileName) {
-        // Add outreach message and timestamp
-        data.outreachMessage = outreachMessage;
-        data.outreachGeneratedAt = new Date().toISOString();
-        writeFileSync(filepath, JSON.stringify(data, null, 2));
-        updated = true;
-        break;
-      }
-    } catch (error) {
-      // Skip invalid files
-    }
-  }
-
-  if (!updated) {
-    throw new Error(`Could not update profile file for: ${profileName}`);
-  }
-
-  return { success: true, profileName, outreachGeneratedAt: new Date().toISOString() };
-}
-
-/**
  * Get qualified profiles with outreach messages that haven't been approved
  */
 function getQualifiedProfilesNeedingReview() {
@@ -300,9 +241,9 @@ function getNextConnectedProfile() {
 }
 
 /**
- * Save follow-up message and mark as sent
+ * Save post-connection message and mark as sent
  */
-function saveFollowupMessage(profileName, followupMessage) {
+function savePostConnectionMessage(profileName, postConnectionMessage) {
   const qualified = getQualifiedProfiles();
   const profile = qualified.find(p => p.name === profileName);
 
@@ -327,10 +268,10 @@ function saveFollowupMessage(profileName, followupMessage) {
     try {
       const data = JSON.parse(readFileSync(filepath, 'utf8'));
       if (data.name === profileName) {
-        // Add follow-up message and mark as sent
-        data.followupMessage = followupMessage;
+        // Add post-connection message and mark as sent
+        data.postConnectionMessage = postConnectionMessage;
         data.outreachSent = true;
-        data.followupSentAt = new Date().toISOString();
+        data.postConnectionMessageSentAt = new Date().toISOString();
         writeFileSync(filepath, JSON.stringify(data, null, 2));
         updated = true;
         break;
@@ -344,7 +285,7 @@ function saveFollowupMessage(profileName, followupMessage) {
     throw new Error(`Could not update profile file for: ${profileName}`);
   }
 
-  return { success: true, profileName, followupSentAt: new Date().toISOString() };
+  return { success: true, profileName, postConnectionMessageSentAt: new Date().toISOString() };
 }
 
 /**
@@ -558,33 +499,6 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         },
       },
       {
-        name: 'get_profile_for_outreach',
-        description: 'Get the next qualified profile that needs an outreach message. ⚠️ CRITICAL: You MUST load outreach guidelines from Google Doc first: https://docs.google.com/document/d/1YbudVmUqeV5bIs6PFXk8aOCMWgEXJ_vOWqawuqtau94/edit?tab=t.0',
-        inputSchema: {
-          type: 'object',
-          properties: {},
-          required: [],
-        },
-      },
-      {
-        name: 'save_outreach',
-        description: 'Save the generated outreach message for a qualified profile. This adds the outreach message and timestamp to the profile JSON.',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            profileName: {
-              type: 'string',
-              description: 'The exact name of the qualified profile',
-            },
-            outreachMessage: {
-              type: 'string',
-              description: 'The personalized outreach message to send to this prospect',
-            },
-          },
-          required: ['profileName', 'outreachMessage'],
-        },
-      },
-      {
         name: 'get_next_outreach_for_review',
         description: 'Get the next outreach message that needs review. Shows profile summary, qualification analysis, and the outreach message. Use this to review messages before sending.',
         inputSchema: {
@@ -635,21 +549,21 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         },
       },
       {
-        name: 'save_followup_message',
-        description: 'Save a follow-up message for a connected profile and mark it as sent (outreachSent=true). The message should be manually sent via LinkedIn or Heyreach UI.',
+        name: 'save_post_connection_message',
+        description: 'Save a post-connection message for a connected profile and mark it as sent (outreachSent=true). The message should be manually sent via LinkedIn or Heyreach UI.',
         inputSchema: {
           type: 'object',
           properties: {
             profileName: {
               type: 'string',
-              description: 'The exact name of the profile to save the follow-up message for',
+              description: 'The exact name of the profile to save the post-connection message for',
             },
-            followupMessage: {
+            postConnectionMessage: {
               type: 'string',
-              description: 'The follow-up message text to send after connection is accepted',
+              description: 'The post-connection message text to send after connection is accepted',
             },
           },
-          required: ['profileName', 'followupMessage'],
+          required: ['profileName', 'postConnectionMessage'],
         },
       },
       {
@@ -924,105 +838,6 @@ Remaining to process: ${unprocessedCount}`;
       };
     }
 
-    case 'get_profile_for_outreach': {
-      const profile = getNextProfileForOutreach();
-
-      if (!profile) {
-        return {
-          content: [
-            {
-              type: 'text',
-              text: 'No more qualified profiles need outreach messages. All qualified profiles already have outreach messages!',
-            },
-          ],
-        };
-      }
-
-      const withoutOutreachCount = getQualifiedProfilesWithoutOutreach().length;
-      const isFirstProfile = withoutOutreachCount === getQualifiedProfiles().length;
-
-      // Add reminder to load outreach guidelines if this is the first profile
-      let reminder = '';
-      if (isFirstProfile) {
-        reminder = `📝 REMINDER: Load your outreach guidelines from Google Doc before writing messages!\nhttps://docs.google.com/document/d/1YbudVmUqeV5bIs6PFXk8aOCMWgEXJ_vOWqawuqtau94/edit?tab=t.0\n\n`;
-      }
-
-      // Format profile data with qualification info
-      const profileText = `${reminder}Profile for Outreach: ${profile.name}
-Title: ${profile.title}
-Company: ${profile.company}
-Location: ${profile.location}
-URL: ${profile.url}
-
-Qualification Score: ${profile.qualification?.analysis?.score || 'N/A'}/100
-
-Reasoning:
-${profile.qualification?.analysis?.reasoning || 'N/A'}
-
-Strengths:
-${profile.qualification?.analysis?.strengths?.map(s => `- ${s}`).join('\n') || 'N/A'}
-
-Concerns:
-${profile.qualification?.analysis?.concerns?.map(c => `- ${c}`).join('\n') || 'N/A'}
-
-Recommended Approach:
-${profile.qualification?.analysis?.recommendedApproach || 'N/A'}
-
-Profiles without outreach: ${withoutOutreachCount}`;
-
-      return {
-        content: [
-          {
-            type: 'text',
-            text: profileText,
-          },
-        ],
-      };
-    }
-
-    case 'save_outreach': {
-      const { profileName, outreachMessage } = args;
-
-      try {
-        if (!outreachMessage || outreachMessage.trim().length === 0) {
-          return {
-            content: [
-              {
-                type: 'text',
-                text: 'Error: Outreach message cannot be empty',
-              },
-            ],
-            isError: true,
-          };
-        }
-
-        const result = saveOutreachMessage(profileName, outreachMessage);
-
-        const message = `✓ Outreach message saved for "${profileName}"
-  Generated at: ${result.outreachGeneratedAt}
-  Message length: ${outreachMessage.length} characters`;
-
-        return {
-          content: [
-            {
-              type: 'text',
-              text: message,
-            },
-          ],
-        };
-      } catch (error) {
-        return {
-          content: [
-            {
-              type: 'text',
-              text: `Error: ${error.message}`,
-            },
-          ],
-          isError: true,
-        };
-      }
-    }
-
     case 'get_next_outreach_for_review': {
       const profile = getNextOutreachForReview();
 
@@ -1209,27 +1024,27 @@ Remaining in queue: ${needingOutreachCount - 1} more profiles need follow-up`;
       };
     }
 
-    case 'save_followup_message': {
-      const { profileName, followupMessage } = args;
+    case 'save_post_connection_message': {
+      const { profileName, postConnectionMessage } = args;
 
       try {
-        if (!followupMessage || followupMessage.trim().length === 0) {
+        if (!postConnectionMessage || postConnectionMessage.trim().length === 0) {
           return {
             content: [
               {
                 type: 'text',
-                text: 'Error: Follow-up message cannot be empty',
+                text: 'Error: Post-connection message cannot be empty',
               },
             ],
             isError: true,
           };
         }
 
-        const result = saveFollowupMessage(profileName, followupMessage);
+        const result = savePostConnectionMessage(profileName, postConnectionMessage);
 
-        const message = `✓ Follow-up message saved for "${profileName}"
-  Marked as sent at: ${result.followupSentAt}
-  Message length: ${followupMessage.length} characters
+        const message = `✓ Post-connection message saved for "${profileName}"
+  Marked as sent at: ${result.postConnectionMessageSentAt}
+  Message length: ${postConnectionMessage.length} characters
 
 Remember: This message must be sent manually via LinkedIn or Heyreach UI.
 The profile is now marked as outreachSent=true and won't appear in the queue again.`;

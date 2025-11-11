@@ -21,18 +21,14 @@ The MCP server integrates with Claude Desktop to provide tools for the complete 
 - `save_qualification` - Saves qualification + auto-sends to Heyreach
 - `get_stats` - Shows qualification statistics
 
-**Outreach Generation Tools:**
-- `get_profile_for_outreach` - Gets next qualified profile needing outreach message
-- `save_outreach` - Saves personalized outreach message
-
 **Outreach Review Tools:**
 - `get_next_outreach_for_review` - Gets next message to review with profile context
 - `approve_outreach` - Marks message as approved and ready
 - `revise_outreach` - Updates message, clears approval
 
-**Follow-up Outreach Tools:**
-- `get_next_connected_profile` - Gets next accepted connection needing follow-up message
-- `save_followup_message` - Saves follow-up message and marks as sent (manual send required)
+**Post-Connection Outreach Tools:**
+- `get_next_connected_profile` - Gets next accepted connection needing post-connection message
+- `save_post_connection_message` - Saves post-connection message and marks as sent (manual send required)
 
 ### Data Flow
 
@@ -59,13 +55,13 @@ The MCP server integrates with Claude Desktop to provide tools for the complete 
    - Updates profiles with connectionAccepted status and outreachSent: false
    - Run manually as needed
    ↓
-6. Follow-up Message Generation (Claude Desktop MCP Tools)
+6. Post-Connection Message Generation (Claude Desktop MCP Tools)
    - get_next_connected_profile - Gets next accepted connection
-   - Generate personalized follow-up message
-   - save_followup_message - Saves message and marks outreachSent: true
+   - Generate personalized post-connection message
+   - save_post_connection_message - Saves message and marks outreachSent: true
    ↓
-7. Send Follow-up Messages (Manual)
-   - Copy saved followupMessage from profile JSON
+7. Send Post-Connection Messages (Manual)
+   - Copy saved postConnectionMessage from profile JSON
    - Send manually via LinkedIn or Heyreach UI
    - API limitation: Cannot automate first message to new connections
 ```
@@ -182,56 +178,31 @@ The csv-loader.js module parses this data and normalizes it for qualification.
 12. User sees: "✓ Sent to Heyreach campaign"
 13. Repeat steps 5-12 until all profiles processed
 
-### Phase 2: Outreach Generation
-
-1. User: "Get the next profile for outreach"
-2. MCP returns qualified profile without outreach message
-3. Claude Desktop generates personalized message using:
-   - Profile details
-   - Qualification analysis
-   - Outreach guidelines from Google Drive
-4. User: "Save outreach for [name] with message: [text]"
-5. MCP saves message to profile JSON
-6. Repeat until all qualified profiles have messages
-
-### Phase 3: Message Review & Approval
-
-1. User: "Get the next outreach message to review"
-2. MCP shows formatted display with:
-   - Profile summary
-   - Qualification analysis
-   - Generated outreach message
-3. User reviews and decides:
-   - "Approve outreach for [name]" → marks as approved
-   - "Revise outreach for [name] with: [new text]" → updates and clears approval
-4. Repeat until all messages approved
-
-### Phase 4: Connection Request Sending (Automated)
+### Phase 2: Connection Request Sending (Automated)
 
 - Heyreach campaign automatically sends connection requests
-- Connection requests include approved outreach messages (if configured in Heyreach)
 
-### Phase 5: Connection Acceptance Tracking (Manual)
+### Phase 3: Connection Acceptance Tracking (Manual)
 
 Run `node check-acceptances.js` to:
 - Poll Heyreach API for accepted connections
 - Update profile JSONs with `connectionAccepted: true` and `outreachSent: false`
 - Track `connectionAcceptedAt` timestamp
 
-### Phase 6: Follow-up Message Generation (Claude Desktop)
+### Phase 4: Post-Connection Message Generation (Claude Desktop)
 
 1. User: "Get the next connected profile"
 2. MCP returns profile with qualification context
-3. Claude generates personalized follow-up message
-4. User: "Save followup message for [name] with: [message]"
+3. Claude generates personalized post-connection message
+4. User: "Save post connection message for [name] with: [message]"
 5. MCP saves message to profile JSON and marks `outreachSent: true`
-6. Repeat until all connected profiles have follow-up messages
+6. Repeat until all connected profiles have post-connection messages
 
-### Phase 7: Send Follow-up Messages (Manual)
+### Phase 5: Send Post-Connection Messages (Manual)
 
 **Manual Process Required**:
 - Review profile JSONs in `data/qualified/` for profiles with `connectionAccepted: true`
-- Copy the `followupMessage` text from each profile
+- Copy the `postConnectionMessage` text from each profile
 - Send messages manually via LinkedIn or Heyreach UI
 - API limitation: Heyreach API cannot send first message to new connections
 
@@ -333,8 +304,8 @@ Qualified profiles include complete tracking:
   "connectionAcceptedAt": "2025-11-05T...",
   "heyreachLeadId": 122319124,
   "outreachSent": false,
-  "followupMessage": "Hi John, thanks for connecting! I wanted to...",
-  "followupSentAt": "2025-11-10T..."
+  "postConnectionMessage": "Hi John, thanks for connecting! I wanted to...",
+  "postConnectionMessageSentAt": "2025-11-10T..."
 }
 ```
 
