@@ -175,6 +175,7 @@ function updateProfilesWithAcceptances(acceptedLeads) {
     match.profile.connectionAccepted = true;
     match.profile.connectionAcceptedAt = new Date().toISOString();
     match.profile.heyreachLeadId = lead.id;
+    match.profile.outreachSent = false; // Initialize for follow-up tracking
 
     // Write updated profile back to file
     writeFileSync(match.filepath, JSON.stringify(match.profile, null, 2));

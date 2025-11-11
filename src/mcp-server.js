@@ -281,6 +281,73 @@ function reviseOutreach(profileName, newMessage) {
 }
 
 /**
+ * Get profiles that are connected but haven't received follow-up outreach
+ */
+function getConnectedProfilesNeedingOutreach() {
+  const qualified = getQualifiedProfiles();
+  return qualified.filter(p =>
+    p.connectionAccepted === true &&
+    p.outreachSent !== true
+  );
+}
+
+/**
+ * Get next connected profile that needs follow-up outreach
+ */
+function getNextConnectedProfile() {
+  const profiles = getConnectedProfilesNeedingOutreach();
+  return profiles.length > 0 ? profiles[0] : null;
+}
+
+/**
+ * Save follow-up message and mark as sent
+ */
+function saveFollowupMessage(profileName, followupMessage) {
+  const qualified = getQualifiedProfiles();
+  const profile = qualified.find(p => p.name === profileName);
+
+  if (!profile) {
+    throw new Error(`Qualified profile not found: ${profileName}`);
+  }
+
+  if (!profile.connectionAccepted) {
+    throw new Error(`Profile "${profileName}" has not accepted connection yet. Wait for connection acceptance first.`);
+  }
+
+  if (profile.outreachSent === true) {
+    throw new Error(`Profile "${profileName}" already has follow-up sent. Cannot overwrite.`);
+  }
+
+  // Find the original file and update it
+  const qualifiedFiles = readdirSync(QUALIFIED_DIR).filter(f => f.endsWith('.json'));
+  let updated = false;
+
+  for (const file of qualifiedFiles) {
+    const filepath = join(QUALIFIED_DIR, file);
+    try {
+      const data = JSON.parse(readFileSync(filepath, 'utf8'));
+      if (data.name === profileName) {
+        // Add follow-up message and mark as sent
+        data.followupMessage = followupMessage;
+        data.outreachSent = true;
+        data.followupSentAt = new Date().toISOString();
+        writeFileSync(filepath, JSON.stringify(data, null, 2));
+        updated = true;
+        break;
+      }
+    } catch (error) {
+      // Skip invalid files
+    }
+  }
+
+  if (!updated) {
+    throw new Error(`Could not update profile file for: ${profileName}`);
+  }
+
+  return { success: true, profileName, followupSentAt: new Date().toISOString() };
+}
+
+/**
  * Get next unprocessed profile
  */
 function getNextUnqualifiedProfile() {
@@ -556,6 +623,33 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             },
           },
           required: ['profileName', 'newMessage'],
+        },
+      },
+      {
+        name: 'get_next_connected_profile',
+        description: 'Get the next profile that has accepted the connection request and needs a follow-up message. Returns profile details and qualification context for crafting a personalized follow-up.',
+        inputSchema: {
+          type: 'object',
+          properties: {},
+          required: [],
+        },
+      },
+      {
+        name: 'save_followup_message',
+        description: 'Save a follow-up message for a connected profile and mark it as sent (outreachSent=true). The message should be manually sent via LinkedIn or Heyreach UI.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            profileName: {
+              type: 'string',
+              description: 'The exact name of the profile to save the follow-up message for',
+            },
+            followupMessage: {
+              type: 'string',
+              description: 'The follow-up message text to send after connection is accepted',
+            },
+          },
+          required: ['profileName', 'followupMessage'],
         },
       },
       {
@@ -1044,6 +1138,101 @@ This message is now ready to send!`;
   New message length: ${newMessage.length} characters
 
 Note: Any previous approval was cleared. Review and approve again if ready.`;
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: message,
+            },
+          ],
+        };
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: 'text',
+              text: `Error: ${error.message}`,
+            },
+          ],
+          isError: true,
+        };
+      }
+    }
+
+    case 'get_next_connected_profile': {
+      const profile = getNextConnectedProfile();
+
+      if (!profile) {
+        return {
+          content: [
+            {
+              type: 'text',
+              text: 'No connected profiles need follow-up outreach. All connected profiles have received follow-up messages!',
+            },
+          ],
+        };
+      }
+
+      const needingOutreachCount = getConnectedProfilesNeedingOutreach().length;
+
+      // Format profile data with qualification info
+      const profileText = `Profile Ready for Follow-up: ${profile.name}
+Title: ${profile.title}
+Company: ${profile.company}
+Location: ${profile.location}
+URL: ${profile.url}
+
+Connection Accepted: ${profile.connectionAcceptedAt}
+
+Qualification Score: ${profile.qualification?.analysis?.score || 'N/A'}/100
+
+Qualification Reasoning:
+${profile.qualification?.analysis?.reasoning || 'N/A'}
+
+Strengths:
+${profile.qualification?.analysis?.strengths?.map(s => `- ${s}`).join('\n') || 'N/A'}
+
+Recommended Approach:
+${profile.qualification?.analysis?.recommendedApproach || 'N/A'}
+
+---
+Remaining in queue: ${needingOutreachCount - 1} more profiles need follow-up`;
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: profileText,
+          },
+        ],
+      };
+    }
+
+    case 'save_followup_message': {
+      const { profileName, followupMessage } = args;
+
+      try {
+        if (!followupMessage || followupMessage.trim().length === 0) {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: 'Error: Follow-up message cannot be empty',
+              },
+            ],
+            isError: true,
+          };
+        }
+
+        const result = saveFollowupMessage(profileName, followupMessage);
+
+        const message = `✓ Follow-up message saved for "${profileName}"
+  Marked as sent at: ${result.followupSentAt}
+  Message length: ${followupMessage.length} characters
+
+Remember: This message must be sent manually via LinkedIn or Heyreach UI.
+The profile is now marked as outreachSent=true and won't appear in the queue again.`;
 
         return {
           content: [

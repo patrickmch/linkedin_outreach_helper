@@ -30,6 +30,10 @@ The MCP server integrates with Claude Desktop to provide tools for the complete 
 - `approve_outreach` - Marks message as approved and ready
 - `revise_outreach` - Updates message, clears approval
 
+**Follow-up Outreach Tools:**
+- `get_next_connected_profile` - Gets next accepted connection needing follow-up message
+- `save_followup_message` - Saves follow-up message and marks as sent (manual send required)
+
 ### Data Flow
 
 ```
@@ -52,12 +56,18 @@ The MCP server integrates with Claude Desktop to provide tools for the complete 
    ↓
 5. Connection Acceptance Tracking (check-acceptances.js)
    - Polls Heyreach API via acceptance-tracker.js
-   - Updates profiles with connectionAccepted status
+   - Updates profiles with connectionAccepted status and outreachSent: false
    - Run manually as needed
    ↓
-6. Follow-up Messages (Manual)
-   - Automated message sending not supported by Heyreach API
-   - Requires manual messaging in LinkedIn or Heyreach UI
+6. Follow-up Message Generation (Claude Desktop MCP Tools)
+   - get_next_connected_profile - Gets next accepted connection
+   - Generate personalized follow-up message
+   - save_followup_message - Saves message and marks outreachSent: true
+   ↓
+7. Send Follow-up Messages (Manual)
+   - Copy saved followupMessage from profile JSON
+   - Send manually via LinkedIn or Heyreach UI
+   - API limitation: Cannot automate first message to new connections
 ```
 
 ### Module Structure
@@ -205,16 +215,25 @@ The csv-loader.js module parses this data and normalizes it for qualification.
 
 Run `node check-acceptances.js` to:
 - Poll Heyreach API for accepted connections
-- Update profile JSONs with `connectionAccepted: true` status
+- Update profile JSONs with `connectionAccepted: true` and `outreachSent: false`
 - Track `connectionAcceptedAt` timestamp
 
-### Phase 6: Follow-up Messages (Manual Only)
+### Phase 6: Follow-up Message Generation (Claude Desktop)
 
-**Important**: Automated message sending is not functional due to Heyreach API limitations:
-- The SendMessage endpoint requires a `conversationId`
-- New connections don't have a `conversationId` until first manual message
-- Follow-up messages must be sent manually via LinkedIn or Heyreach UI
-- Profile JSONs track approved messages for reference
+1. User: "Get the next connected profile"
+2. MCP returns profile with qualification context
+3. Claude generates personalized follow-up message
+4. User: "Save followup message for [name] with: [message]"
+5. MCP saves message to profile JSON and marks `outreachSent: true`
+6. Repeat until all connected profiles have follow-up messages
+
+### Phase 7: Send Follow-up Messages (Manual)
+
+**Manual Process Required**:
+- Review profile JSONs in `data/qualified/` for profiles with `connectionAccepted: true`
+- Copy the `followupMessage` text from each profile
+- Send messages manually via LinkedIn or Heyreach UI
+- API limitation: Heyreach API cannot send first message to new connections
 
 ## Directory Structure
 
@@ -312,7 +331,10 @@ Qualified profiles include complete tracking:
   "outreachApprovedAt": "2025-11-05T...",
   "connectionAccepted": true,
   "connectionAcceptedAt": "2025-11-05T...",
-  "heyreachLeadId": 122319124
+  "heyreachLeadId": 122319124,
+  "outreachSent": false,
+  "followupMessage": "Hi John, thanks for connecting! I wanted to...",
+  "followupSentAt": "2025-11-10T..."
 }
 ```
 
