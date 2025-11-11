@@ -992,12 +992,13 @@ Note: Any previous approval was cleared. Review and approve again if ready.`;
       const needingOutreachCount = getConnectedProfilesNeedingOutreach().length;
 
       // Format profile data with qualification info
-      const profileText = `Profile Ready for Follow-up: ${profile.name}
+      const profileText = `Profile Ready for Post-Connection Message: ${profile.name}
+
+📧 SEND MESSAGE HERE: ${profile.url}
+
 Title: ${profile.title}
 Company: ${profile.company}
 Location: ${profile.location}
-URL: ${profile.url}
-
 Connection Accepted: ${profile.connectionAcceptedAt}
 
 Qualification Score: ${profile.qualification?.analysis?.score || 'N/A'}/100
@@ -1012,7 +1013,7 @@ Recommended Approach:
 ${profile.qualification?.analysis?.recommendedApproach || 'N/A'}
 
 ---
-Remaining in queue: ${needingOutreachCount - 1} more profiles need follow-up`;
+Remaining in queue: ${needingOutreachCount - 1} more profiles need post-connection message`;
 
       return {
         content: [
