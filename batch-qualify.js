@@ -2,213 +2,75 @@
 
 /**
  * Batch Qualification Script
- * Processes unqualified profiles in batches and saves results
+ * Gets qualification statistics via API
+ * Requires API server to be running
+ *
+ * Note: For actual qualification, use the API endpoints:
+ *   POST /api/qualifications - Single qualification
+ *   POST /api/qualifications/batch - Batch qualification
  */
 
-import { readFileSync, writeFileSync, readdirSync, existsSync, mkdirSync } from 'fs';
-import { join, dirname } from 'path';
-import { fileURLToPath } from 'url';
-import { loadAllProfiles } from './src/csv-loader.js';
-import { config } from './src/config.js';
-import { addProspectToCampaign } from './src/heyreach-client.js';
+const API_URL = process.env.API_URL || 'http://localhost:3000';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-const PROJECT_ROOT = __dirname;
-const QUALIFIED_DIR = join(PROJECT_ROOT, 'data', 'qualified');
-const DISQUALIFIED_DIR = join(PROJECT_ROOT, 'data', 'disqualified');
+console.log('Fetching qualification statistics...\n');
 
-/**
- * Ensure directories exist
- */
-function ensureDirs() {
-  if (!existsSync(QUALIFIED_DIR)) {
-    mkdirSync(QUALIFIED_DIR, { recursive: true });
-  }
-  if (!existsSync(DISQUALIFIED_DIR)) {
-    mkdirSync(DISQUALIFIED_DIR, { recursive: true });
-  }
-}
+try {
+  // Get comprehensive stats from API
+  const response = await fetch(`${API_URL}/api/stats`);
 
-/**
- * Get list of already processed profile names
- */
-function getProcessedProfileNames() {
-  const names = new Set();
-
-  ensureDirs();
-
-  // Get qualified profiles
-  const qualifiedFiles = readdirSync(QUALIFIED_DIR).filter(f => f.endsWith('.json'));
-  qualifiedFiles.forEach(file => {
-    try {
-      const filepath = join(QUALIFIED_DIR, file);
-      const data = JSON.parse(readFileSync(filepath, 'utf8'));
-      names.add(data.name);
-    } catch (error) {
-      // Skip invalid files
-    }
-  });
-
-  // Get disqualified profiles
-  const disqualifiedFiles = readdirSync(DISQUALIFIED_DIR).filter(f => f.endsWith('.json'));
-  disqualifiedFiles.forEach(file => {
-    try {
-      const filepath = join(DISQUALIFIED_DIR, file);
-      const data = JSON.parse(readFileSync(filepath, 'utf8'));
-      names.add(data.name);
-    } catch (error) {
-      // Skip invalid files
-    }
-  });
-
-  return names;
-}
-
-/**
- * Get next batch of unprocessed profiles
- */
-function getNextBatch(batchSize = 5) {
-  const allProfiles = loadAllProfiles();
-  const processedNames = getProcessedProfileNames();
-  const unprocessed = allProfiles.filter(p => !processedNames.has(p.name));
-
-  return unprocessed.slice(0, batchSize);
-}
-
-/**
- * Save qualification result
- */
-async function saveQualification(profileName, qualificationData) {
-  const allProfiles = loadAllProfiles();
-  const profile = allProfiles.find(p => p.name === profileName);
-
-  if (!profile) {
-    throw new Error(`Profile not found: ${profileName}`);
+  if (!response.ok) {
+    throw new Error(`API error: ${response.status} ${response.statusText}`);
   }
 
-  const { qualified, score, reasoning, strengths, concerns, recommendedApproach } = qualificationData;
+  const data = await response.json();
 
-  if (qualified && score >= config.minScore) {
-    // Save to qualified directory
-    ensureDirs();
-    const timestamp = Date.now();
-    const filename = `qualified_${timestamp}_${profile.name.replace(/[^a-zA-Z0-9]/g, '_')}.json`;
-    const filepath = join(QUALIFIED_DIR, filename);
+  console.log('='.repeat(50));
+  console.log('📊 Qualification Statistics');
+  console.log('='.repeat(50));
+  console.log('\nProfiles:');
+  console.log(`  Total: ${data.profiles.total}`);
+  console.log(`  New (unqualified): ${data.profiles.new}`);
+  console.log(`  Qualified: ${data.profiles.qualified}`);
+  console.log(`  Rejected: ${data.profiles.rejected}`);
+  console.log(`  Contacted: ${data.profiles.contacted}`);
 
-    const prospect = {
-      ...profile,
-      qualification: {
-        isQualified: true,
-        analysis: {
-          qualified,
-          score,
-          reasoning,
-          strengths,
-          concerns,
-          recommendedApproach
-        },
-        qualifiedAt: new Date().toISOString()
-      }
-    };
-
-    // Try to send to Heyreach automatically
-    if (config.heyreach && config.heyreach.apiKey) {
-      try {
-        console.log(`Sending ${profileName} to Heyreach...`);
-        const heyreachResult = await addProspectToCampaign(profile);
-
-        prospect.heyreach = {
-          sent: true,
-          sentAt: new Date().toISOString(),
-          heyreachId: heyreachResult.heyreachId,
-          listId: config.heyreach.listId
-        };
-
-        console.log(`✓ Successfully sent ${profileName} to Heyreach`);
-      } catch (error) {
-        console.log(`✗ Failed to send ${profileName} to Heyreach: ${error.message}`);
-
-        prospect.heyreach = {
-          sent: false,
-          error: error.message,
-          attemptedAt: new Date().toISOString()
-        };
-      }
-    }
-
-    writeFileSync(filepath, JSON.stringify(prospect, null, 2));
-
-    return {
-      saved: true,
-      filepath,
-      qualified: true,
-      heyreachSent: prospect.heyreach?.sent || false
-    };
-  } else {
-    // Save to disqualified directory
-    ensureDirs();
-    const timestamp = Date.now();
-    const filename = `disqualified_${timestamp}_${profile.name.replace(/[^a-zA-Z0-9]/g, '_')}.json`;
-    const filepath = join(DISQUALIFIED_DIR, filename);
-
-    const prospect = {
-      ...profile,
-      qualification: {
-        isQualified: false,
-        analysis: {
-          qualified,
-          score,
-          reasoning,
-          strengths,
-          concerns,
-          recommendedApproach
-        },
-        disqualifiedAt: new Date().toISOString()
-      }
-    };
-
-    writeFileSync(filepath, JSON.stringify(prospect, null, 2));
-
-    return { saved: true, filepath, qualified: false };
+  if (data.qualifications) {
+    console.log('\nQualifications:');
+    console.log(`  Total processed: ${data.qualifications.total}`);
+    console.log(`  Qualified: ${data.qualifications.qualified}`);
+    console.log(`  Rejected: ${data.qualifications.rejected}`);
+    console.log(`  Avg score (qualified): ${data.qualifications.avg_qualified_score?.toFixed(1) || 'N/A'}`);
+    console.log(`  Avg score (overall): ${data.qualifications.avg_overall_score?.toFixed(1) || 'N/A'}`);
   }
-}
 
-/**
- * Get stats
- */
-function getStats() {
-  const allProfiles = loadAllProfiles();
-  const processedNames = getProcessedProfileNames();
-  const unprocessed = allProfiles.filter(p => !processedNames.has(p.name));
+  if (data.outreach) {
+    console.log('\nOutreach:');
+    console.log(`  Sent: ${data.outreach.sent}`);
+    console.log(`  Accepted: ${data.outreach.accepted}`);
+    console.log(`  Replied: ${data.outreach.replied}`);
+    console.log(`  Failed: ${data.outreach.failed}`);
+  }
 
-  const qualifiedFiles = readdirSync(QUALIFIED_DIR).filter(f => f.endsWith('.json'));
-  const disqualifiedFiles = readdirSync(DISQUALIFIED_DIR).filter(f => f.endsWith('.json'));
+  if (data.connections) {
+    console.log('\nConnections:');
+    console.log(`  Total: ${data.connections.total}`);
+    console.log(`  Follow-up sent: ${data.connections.follow_up_sent}`);
+    console.log(`  Pending follow-up: ${data.connections.pending_follow_up}`);
+  }
 
-  return {
-    total: allProfiles.length,
-    qualified: qualifiedFiles.length,
-    disqualified: disqualifiedFiles.length,
-    remaining: unprocessed.length,
-    processed: processedNames.size
-  };
-}
+  console.log('\n' + '='.repeat(50));
+  console.log('\nTo qualify profiles:');
+  console.log('  1. Get unqualified profiles: curl "' + API_URL + '/api/profiles?status=new&limit=5"');
+  console.log('  2. Qualify: curl -X POST "' + API_URL + '/api/qualifications" -d \'{"profile_id":1,"criteria":{...}}\'');
+  console.log('  3. Batch qualify: curl -X POST "' + API_URL + '/api/qualifications/batch" -d \'{"profile_ids":[1,2,3],"criteria":{...}}\'');
+  console.log('='.repeat(50));
 
-// Export functions for use in interactive mode
-export {
-  getNextBatch,
-  saveQualification,
-  getStats,
-  getProcessedProfileNames
-};
+  process.exit(0);
 
-// If run directly, show stats
-if (import.meta.url === `file://${process.argv[1]}`) {
-  const stats = getStats();
-  console.log('\n📊 Qualification Statistics:');
-  console.log(`   Total profiles: ${stats.total}`);
-  console.log(`   Qualified: ${stats.qualified}`);
-  console.log(`   Disqualified: ${stats.disqualified}`);
-  console.log(`   Remaining: ${stats.remaining}`);
-  console.log(`   Processed: ${stats.processed}\n`);
+} catch (error) {
+  console.error('\n✗ Error:', error.message);
+  console.error('\nMake sure:');
+  console.error('  1. API server is running (npm start)');
+  console.error('  2. API_URL is correct:', API_URL);
+  process.exit(1);
 }

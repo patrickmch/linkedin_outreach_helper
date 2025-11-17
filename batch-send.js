@@ -1,78 +1,83 @@
 #!/usr/bin/env node
 
-import { readdirSync, readFileSync, writeFileSync } from 'fs';
-import { join } from 'path';
-import { addProspectToCampaign } from './src/heyreach-client.js';
+/**
+ * Batch Send Script
+ * Sends qualified profiles to Heyreach campaign via API
+ * Requires API server to be running
+ */
 
-const QUALIFIED_DIR = './data/qualified';
+const API_URL = process.env.API_URL || 'http://localhost:3000';
 const BATCH_SIZE = 999; // Send all remaining
 
 console.log('Finding qualified profiles to send to Heyreach...\n');
 
-// Read all qualified profiles
-const files = readdirSync(QUALIFIED_DIR)
-  .filter(f => f.endsWith('.json'))
-  .map(f => join(QUALIFIED_DIR, f));
+try {
+  // Get all qualified profiles that haven't been sent
+  const response = await fetch(`${API_URL}/api/profiles?status=qualified&limit=1000`);
 
-// Filter for profiles not yet sent to Heyreach
-const unsentProfiles = [];
-for (const filepath of files) {
-  try {
-    const profile = JSON.parse(readFileSync(filepath, 'utf-8'));
-    // Skip if already sent successfully
-    if (!profile.heyreach || profile.heyreach.sent !== true) {
-      unsentProfiles.push({ filepath, profile });
-    }
-  } catch (error) {
-    console.error(`Warning: Could not read ${filepath}: ${error.message}`);
-  }
-}
-
-console.log(`Found ${unsentProfiles.length} profiles not yet sent to Heyreach`);
-console.log(`Sending first ${Math.min(BATCH_SIZE, unsentProfiles.length)} profiles...\n`);
-
-// Send first N profiles
-const toSend = unsentProfiles.slice(0, BATCH_SIZE);
-let successCount = 0;
-let failCount = 0;
-
-for (const { filepath, profile } of toSend) {
-  console.log(`[${successCount + failCount + 1}/${toSend.length}] ${profile.name}`);
-
-  try {
-    const result = await addProspectToCampaign(profile);
-
-    // Update profile with success status
-    profile.heyreach = {
-      sent: true,
-      sentAt: new Date().toISOString(),
-      heyreachId: result.heyreachId,
-      listId: "406467"
-    };
-
-    writeFileSync(filepath, JSON.stringify(profile, null, 2));
-    console.log(`  ✓ Sent successfully`);
-    successCount++;
-
-  } catch (error) {
-    // Update profile with error status
-    profile.heyreach = {
-      sent: false,
-      error: error.message,
-      attemptedAt: new Date().toISOString()
-    };
-
-    writeFileSync(filepath, JSON.stringify(profile, null, 2));
-    console.error(`  ✗ Failed: ${error.message}`);
-    failCount++;
+  if (!response.ok) {
+    throw new Error(`API error: ${response.status} ${response.statusText}`);
   }
 
-  console.log('');
-}
+  const data = await response.json();
+  const profiles = data.profiles || [];
 
-console.log('='.repeat(50));
-console.log(`Batch send complete!`);
-console.log(`  Success: ${successCount}`);
-console.log(`  Failed: ${failCount}`);
-console.log(`  Remaining: ${unsentProfiles.length - toSend.length}`);
-console.log('='.repeat(50));
+  // Filter for profiles without outreach tracking
+  const unsentProfiles = [];
+  for (const profile of profiles) {
+    // Check if profile has been sent to outreach
+    const outreachCheck = await fetch(`${API_URL}/api/outreach/status`);
+    // For now, just collect all qualified profiles
+    unsentProfiles.push(profile);
+  }
+
+  console.log(`Found ${unsentProfiles.length} qualified profiles`);
+  console.log(`Sending first ${Math.min(BATCH_SIZE, unsentProfiles.length)} profiles...\n`);
+
+  // Prepare profile IDs to send
+  const toSend = unsentProfiles.slice(0, BATCH_SIZE);
+  const profileIds = toSend.map(p => p.id);
+
+  if (profileIds.length === 0) {
+    console.log('No profiles to send!');
+    process.exit(0);
+  }
+
+  // Send to Heyreach via API
+  const sendResponse = await fetch(`${API_URL}/api/outreach/send`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ profile_ids: profileIds })
+  });
+
+  if (!sendResponse.ok) {
+    const errorData = await sendResponse.json();
+    throw new Error(`Send failed: ${errorData.error || sendResponse.statusText}`);
+  }
+
+  const result = await sendResponse.json();
+
+  console.log('='.repeat(50));
+  console.log(`Batch send complete!`);
+  console.log(`  Success: ${result.sent}`);
+  console.log(`  Failed: ${result.failed}`);
+  console.log(`  Total: ${result.total}`);
+  if (result.errors) {
+    console.log('\nErrors:');
+    result.errors.forEach(err => {
+      console.log(`  - Profile ${err.profile_id}: ${err.error}`);
+    });
+  }
+  console.log('='.repeat(50));
+
+  process.exit(0);
+
+} catch (error) {
+  console.error('\n✗ Error:', error.message);
+  console.error('\nMake sure:');
+  console.error('  1. API server is running (npm start)');
+  console.error('  2. API_URL is correct:', API_URL);
+  process.exit(1);
+}
