@@ -1,9 +1,37 @@
+# Dependencies
 node_modules/
+
+# Environment variables
+.env
 config.json
-chrome-profile/
+
+# Database
 data/
 profiles/
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
+
+# Logs
+logs/
 *.log
-.DS_Store
+npm-debug.log*
+
+# Legacy files
+chrome-profile/
 stats.json
 cookies.json
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Railway
+.railway/
