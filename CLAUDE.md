@@ -74,6 +74,7 @@ The MCP server integrates with Claude Desktop to provide tools for the complete 
 **src/heyreach-client.js** - Heyreach API integration for automatic sending
 **src/acceptance-tracker.js** - Polls Heyreach API for connection acceptances
 **src/message-sender.js** - Message sending (not functional - API limitation)
+**batch-qualify.js** - Reusable batch qualification module and statistics utility
 **check-acceptances.js** - Standalone script to check for accepted connections
 **batch-send.js** - Standalone script to retry failed Heyreach sends
 
@@ -217,6 +218,7 @@ linkedin-outreach-helper/
 │   ├── heyreach-client.js    # Heyreach API integration
 │   ├── acceptance-tracker.js # Connection acceptance polling
 │   └── message-sender.js     # Message sending (not functional)
+├── batch-qualify.js          # Batch qualification module and stats utility
 ├── check-acceptances.js      # Script to check accepted connections
 ├── batch-send.js             # Script to retry failed sends
 ├── data/
