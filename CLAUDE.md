@@ -4,92 +4,168 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-LinkedIn Outreach Automation is an end-to-end prospecting system that combines AI-powered lead qualification (via MCP) with automated connection request sending (via Heyreach). The system qualifies LinkedIn prospects in Claude Desktop, generates personalized outreach messages, and automatically sends connection requests through Heyreach.
+LinkedIn Outreach Automation API is an end-to-end prospecting system deployed on Railway. It combines AI-powered lead qualification (via LLM Router API) with automated connection request sending (via Heyreach API). The system qualifies LinkedIn prospects using AI, generates personalized outreach messages, and automatically sends connection requests through Heyreach.
+
+**Architecture:** Node.js/Express REST API + SQLite database + LLM Router integration + Heyreach API integration
 
 ## Core Architecture
 
-### MCP Server (Primary Component)
+### REST API Server (src/server.js)
 
-**File:** `src/mcp-server.js`
+Express.js API server with the following routes:
 
-The MCP server integrates with Claude Desktop to provide tools for the complete prospecting workflow:
+**Profiles** (`/api/profiles`)
+- `POST /import` - Upload and parse LinkedIn CSV
+- `GET /` - List profiles with query filters (?status=new&limit=5)
+- `GET /:id` - Get single profile
+- `PATCH /:id` - Update profile metadata
+- `DELETE /:id` - Remove bad imports
 
-**Qualification Tools:**
-- `get_csv_info` - Shows current CSV file and profile count
-- `get_next_batch` - Returns 5 profiles for batch processing (RECOMMENDED)
-- `get_next_profile` - Returns single profile with full details
-- `save_qualification` - Saves qualification + auto-sends to Heyreach
-- `get_stats` - Shows qualification statistics
+**Qualifications** (`/api/qualifications`)
+- `POST /` - Qualify profile via LLM Router
+- `POST /batch` - Qualify multiple profiles
+- `GET /` - List qualifications
+- `GET /:id` - Get qualification details
 
-**Outreach Review Tools:**
-- `get_next_outreach_for_review` - Gets next message to review with profile context
-- `approve_outreach` - Marks message as approved and ready
-- `revise_outreach` - Updates message, clears approval
+**Outreach** (`/api/outreach`)
+- `POST /send` - Send to Heyreach campaign
+- `GET /status` - Campaign statistics
 
-**Post-Connection Outreach Tools:**
-- `get_next_connected_profile` - Gets next accepted connection needing post-connection message
-- `save_post_connection_message` - Saves post-connection message and marks as sent (manual send required)
+**Connections** (`/api/connections`)
+- `POST /sync` - Sync accepted connections from Heyreach
+- `GET /pending` - Get connections needing follow-up
+- `GET /:id` - Get connection details
+- `POST /:id/message` - Save follow-up message
+- `PATCH /:id` - Update connection metadata
+
+**Stats** (`/api/stats`)
+- `GET /` - Dashboard statistics
+- `GET /funnel` - Conversion funnel analysis
+
+**Health** (`/health`)
+- Health check endpoint for monitoring
+
+### Database Schema (SQLite)
+
+**src/database/schema.sql** defines four main tables:
+
+1. **profiles** - LinkedIn profile data from CSV imports
+   - Core fields: linkedin_url, name, title, company, location
+   - JSON field: profile_data (experience, education, skills)
+   - Status tracking: new, qualified, rejected, contacted
+   - Indexed on: status, linkedin_url, imported_at
+
+2. **qualifications** - AI qualification results
+   - Fields: qualified, score, reasoning, strengths, concerns
+   - Tracking: criteria_used, llm_response, recommended_approach
+   - One qualification per profile (UNIQUE constraint)
+   - Indexed on: profile_id, qualified, score
+
+3. **outreach_tracking** - Heyreach integration tracking
+   - Fields: heyreach_list_id, heyreach_lead_id, heyreach_campaign_id
+   - Status: pending, sent, delivered, accepted, replied, failed
+   - Error tracking: error_message
+   - Indexed on: profile_id, status, heyreach_lead_id
+
+4. **connections** - Accepted connections and follow-up
+   - Fields: connected_at, follow_up_sent, follow_up_message
+   - Tracking: heyreach_lead_id, notes
+   - Indexed on: profile_id, follow_up_sent, connected_at
+
+**Features:**
+- Foreign key constraints with CASCADE delete
+- Automatic updated_at timestamps (triggers)
+- Comprehensive indexing for performance
+- JSON field storage for complex data
 
 ### Data Flow
 
 ```
-1. LinkedIn Sales Navigator CSV Export → ~/Downloads
-   ↓
-2. Claude Desktop (MCP Tools)
-   - Load CSV via csv-loader.js
-   - Get batch of 5 profiles
-   - AI qualification (score 0-100)
-   - Save to data/qualified/ or data/disqualified/
-   ↓
-3. Automatic Heyreach Integration (heyreach-client.js)
-   - POST /list/AddLeadsToListV2
-   - Add qualified prospect to list 406467
-   - Track send status in profile JSON
-   ↓
-4. Heyreach Campaign
-   - Campaign triggered by list update
-   - Sends LinkedIn connection request
-   ↓
-5. Connection Acceptance Tracking (check-acceptances.js)
-   - Polls Heyreach API via acceptance-tracker.js
-   - Updates profiles with connectionAccepted status and outreachSent: false
-   - Run manually as needed
-   ↓
-6. Post-Connection Message Generation (Claude Desktop MCP Tools)
-   - get_next_connected_profile - Gets next accepted connection
-   - Generate personalized post-connection message
-   - save_post_connection_message - Saves message and marks outreachSent: true
-   ↓
-7. Send Post-Connection Messages (Manual)
-   - Copy saved postConnectionMessage from profile JSON
-   - Send manually via LinkedIn or Heyreach UI
-   - API limitation: Cannot automate first message to new connections
+1. CSV Upload → POST /api/profiles/import
+   ↓ Parses LinkedIn Sales Navigator CSV
+   ↓ Stores in profiles table with status='new'
+
+2. AI Qualification → POST /api/qualifications
+   ↓ Sends profile + criteria to LLM Router API
+   ↓ LLM Router calls Claude/Gemini
+   ↓ Stores result in qualifications table
+   ↓ Updates profile.status to 'qualified' or 'rejected'
+
+3. Heyreach Send → POST /api/outreach/send
+   ↓ Sends qualified profiles to Heyreach API
+   ↓ Tracks in outreach_tracking table
+   ↓ Updates profile.status to 'contacted'
+
+4. Connection Sync → POST /api/connections/sync
+   ↓ Polls Heyreach for accepted connections
+   ↓ Creates records in connections table
+   ↓ Updates outreach_tracking.status to 'accepted'
+
+5. Follow-up Messages → POST /api/connections/:id/message
+   ↓ Saves post-connection message
+   ↓ Marks follow_up_sent = true
+   ↓ Manual send via LinkedIn/Heyreach UI (API limitation)
 ```
 
 ### Module Structure
 
-**src/mcp-server.js** - MCP server with all qualification, outreach, and review tools
-**src/csv-loader.js** - Auto-finds and parses LinkedIn CSV exports from ~/Downloads
-**src/config.js** - Configuration loader (loads from config.json)
-**src/heyreach-client.js** - Heyreach API integration for automatic sending
-**src/acceptance-tracker.js** - Polls Heyreach API for connection acceptances
-**src/message-sender.js** - Message sending (not functional - API limitation)
-**batch-qualify.js** - Reusable batch qualification module and statistics utility
-**check-acceptances.js** - Standalone script to check for accepted connections
-**batch-send.js** - Standalone script to retry failed Heyreach sends
+**src/server.js** - Main Express server with routing
+**src/database/db.js** - SQLite initialization and utilities
+**src/database/schema.sql** - Database schema with indexes
+**src/routes/profiles.js** - Profile import and management
+**src/routes/qualifications.js** - LLM Router integration for AI qualification
+**src/routes/outreach.js** - Heyreach campaign integration
+**src/routes/connections.js** - Connection tracking and follow-up
+**src/routes/stats.js** - Statistics and analytics
+**src/config.js** - Configuration loader (env vars + config.json)
+**batch-qualify.js** - Reusable batch qualification module
+**check-acceptances.js** - Standalone script to check accepted connections
+**batch-send.js** - Standalone script to retry failed sends
 
-### Automatic Heyreach Integration
+### LLM Router Integration
 
-When a prospect is qualified (score ≥ minScore), `save_qualification` automatically:
+The `/api/qualifications` endpoint integrates with an external LLM Router API:
 
-1. Saves profile to `data/qualified/`
-2. Calls `addProspectToCampaign(profile)` from heyreach-client.js
-3. Sends POST request to Heyreach API
-4. Updates profile JSON with send status
+**Endpoint:** `POST ${LLM_ROUTER_URL}/api/query`
 
-**API Endpoint:** `POST https://api.heyreach.io/api/public/list/AddLeadsToListV2`
+**Request:**
+```javascript
+{
+  "prompt": "Analyze this LinkedIn profile...",
+  "llm": "claude",  // or "gemini"
+  "context_source": "json",
+  "context_config": {
+    "data": { /* qualification criteria */ }
+  }
+}
+```
 
-**Request Format:**
+**Response:**
+```javascript
+{
+  "response": "{ \"qualified\": true, \"score\": 85, ... }",
+  "llm_used": "claude",
+  "context_loaded": true,
+  "context_summary": "..."
+}
+```
+
+The qualification endpoint:
+1. Builds a prompt with profile details
+2. Sends criteria as JSON context to LLM Router
+3. Parses JSON from LLM response
+4. Stores full LLM response for debugging
+5. Saves criteria_used for audit trail
+
+### Heyreach Integration
+
+**Adding prospects to campaign:**
+
+Endpoint: `POST ${HEYREACH_BASE_URL}/list/AddLeadsToListV2`
+
+Headers: `X-API-KEY: ${HEYREACH_API_KEY}`
+
+Body:
 ```javascript
 {
   leads: [{
@@ -103,370 +179,354 @@ When a prospect is qualified (score ≥ minScore), `save_qualification` automati
     emailAddress: "",
     profileUrl: "https://linkedin.com/in/johndoe"
   }],
-  listId: 406467
+  listId: parseInt(HEYREACH_LIST_ID)
 }
 ```
 
-**Profile JSON with Heyreach Tracking:**
-```json
+**Checking connection acceptances:**
+
+Endpoint: `POST ${HEYREACH_BASE_URL}/campaign/GetCampaignLeads`
+
+Body:
+```javascript
 {
-  "heyreach": {
-    "sent": true,
-    "sentAt": "2025-11-05T...",
-    "heyreachId": "https://linkedin.com/in/johndoe",
-    "listId": "406467"
-  }
+  campaignId: parseInt(HEYREACH_CAMPAIGN_ID),
+  page: 1,
+  pageSize: 100
 }
 ```
 
-**If send fails:**
-```json
-{
-  "heyreach": {
-    "sent": false,
-    "error": "Heyreach API error (500): ...",
-    "attemptedAt": "2025-11-05T..."
-  }
-}
-```
+Filters for `leadConnectionStatus === "ConnectionAccepted"` and updates database.
 
 ### Configuration System
 
-Configuration is loaded from `config.json` (gitignored):
+Configuration supports both environment variables (Railway) and config.json (local):
 
+**Environment Variables (Railway):**
+```bash
+PORT=3000
+DATABASE_PATH=/app/data/linkedin-outreach.db
+LLM_ROUTER_URL=https://your-llm-router.railway.app
+HEYREACH_API_KEY=your_api_key
+HEYREACH_LIST_ID=406467
+HEYREACH_BASE_URL=https://api.heyreach.io/api/public
+HEYREACH_CAMPAIGN_ID=your_campaign_id
+MIN_SCORE=60
+```
+
+**config.json (Local):**
 ```json
 {
   "minScore": 60,
   "heyreach": {
-    "apiKey": "2yBW9A9qRDMI092vmlNiMSZOzg/sJOletD3n+oHPWPk=",
+    "apiKey": "...",
     "listId": "406467",
-    "baseUrl": "https://api.heyreach.io/api/public"
+    "baseUrl": "https://api.heyreach.io/api/public",
+    "campaignId": "..."
   }
 }
 ```
 
-**Qualification criteria** and **outreach guidelines** are stored in Google Drive for easy editing:
-- Qualification Criteria: User's Google Drive document
-- Outreach Guidelines: https://docs.google.com/document/d/1YbudVmUqeV5bIs6PFXk8aOCMWgEXJ_vOWqawuqtau94/edit?tab=t.0
+Config loader (src/config.js) tries env vars first, falls back to config.json.
 
-## CSV Export Format
+## CSV Import Format
 
-The MCP server automatically finds the most recent LinkedIn Sales Navigator CSV export in ~/Downloads. The CSV contains:
-
+LinkedIn Sales Navigator CSV export format:
 - **Identity**: full_name, headline, location_name, profile_url
-- **Experience**: Up to 10 positions with titles, dates, descriptions
-- **Education**: Up to 3 schools with degrees and fields of study
-- **Skills**: Comma-separated list with endorsement counts
-- **Connections**: connections_count, mutual connections
+- **Experience**: position_1_title...position_10_title, position_1_company, etc.
+- **Education**: school_1_name...school_3_name, school_1_degree, etc.
+- **Skills**: skills (comma-separated with counts)
+- **Connections**: connections_count
 
-The csv-loader.js module parses this data and normalizes it for qualification.
+Parser handles:
+- Up to 10 positions
+- Up to 3 schools
+- ON CONFLICT updates for re-imports
+- Error tracking for failed imports
 
 ## Complete Workflow
 
-### Phase 1: Batch Qualification
+### Phase 1: Import & Qualify
 
-1. User exports LinkedIn Sales Navigator search to CSV
-2. CSV saved to ~/Downloads
-3. User opens Claude Desktop
-4. User loads qualification criteria from Google Drive
-5. User: "Get the next batch of 5 profiles"
-6. MCP returns 5 profiles with summary info
-7. User does quick screen for obvious disqualifiers
-8. User analyzes promising profiles against full criteria
-9. User: "Save qualification for [name] with score X, reasoning..."
-10. MCP server saves to data/qualified/ or data/disqualified/
-11. **Automatic**: If qualified, sends to Heyreach API
-12. User sees: "✓ Sent to Heyreach campaign"
-13. Repeat steps 5-12 until all profiles processed
+```bash
+# 1. Upload CSV
+curl -X POST http://localhost:3000/api/profiles/import \
+  -F "csv=@linkedin_export.csv"
 
-### Phase 2: Connection Request Sending (Automated)
+# 2. Get unqualified profiles
+curl "http://localhost:3000/api/profiles?status=new&limit=5"
 
-- Heyreach campaign automatically sends connection requests
+# 3. Qualify profile
+curl -X POST http://localhost:3000/api/qualifications \
+  -H "Content-Type: application/json" \
+  -d '{
+    "profile_id": 1,
+    "criteria": {
+      "role": "CEO or Partner",
+      "company_size": "Mid-market",
+      "location": "Denver metro area"
+    },
+    "llm": "claude"
+  }'
 
-### Phase 3: Connection Acceptance Tracking (Manual)
+# 4. View stats
+curl http://localhost:3000/api/stats
+```
 
-Run `node check-acceptances.js` to:
-- Poll Heyreach API for accepted connections
-- Update profile JSONs with `connectionAccepted: true` and `outreachSent: false`
-- Track `connectionAcceptedAt` timestamp
+### Phase 2: Send to Heyreach
 
-### Phase 4: Post-Connection Message Generation (Claude Desktop)
+```bash
+# Send qualified profiles to campaign
+curl -X POST http://localhost:3000/api/outreach/send \
+  -H "Content-Type: application/json" \
+  -d '{
+    "profile_ids": [1, 2, 3]
+  }'
 
-1. User: "Get the next connected profile"
-2. MCP returns profile with qualification context
-3. Claude generates personalized post-connection message
-4. User: "Save post connection message for [name] with: [message]"
-5. MCP saves message to profile JSON and marks `outreachSent: true`
-6. Repeat until all connected profiles have post-connection messages
+# Check outreach status
+curl http://localhost:3000/api/outreach/status
+```
 
-### Phase 5: Send Post-Connection Messages (Manual)
+### Phase 3: Sync Connections
 
-**Manual Process Required**:
-- Review profile JSONs in `data/qualified/` for profiles with `connectionAccepted: true`
-- Copy the `postConnectionMessage` text from each profile
-- Send messages manually via LinkedIn or Heyreach UI
-- API limitation: Heyreach API cannot send first message to new connections
+```bash
+# Sync accepted connections from Heyreach
+curl -X POST http://localhost:3000/api/connections/sync \
+  -H "Content-Type: application/json" \
+  -d '{
+    "campaign_id": 12345
+  }'
+
+# Get pending follow-ups
+curl "http://localhost:3000/api/connections/pending"
+```
+
+### Phase 4: Follow-up Messages
+
+```bash
+# Get connection details
+curl http://localhost:3000/api/connections/1
+
+# Save follow-up message
+curl -X POST http://localhost:3000/api/connections/1/message \
+  -H "Content-Type: application/json" \
+  -d '{
+    "message": "Hi John, thanks for connecting! I wanted to...",
+    "send_now": false
+  }'
+```
+
+**Note:** Follow-up messages must be sent manually via LinkedIn or Heyreach UI due to API limitations (new connections don't have conversationId).
 
 ## Directory Structure
 
 ```
 linkedin-outreach-helper/
 ├── src/
-│   ├── mcp-server.js         # MCP server with all tools (main)
-│   ├── csv-loader.js         # Auto-finds CSV in ~/Downloads
-│   ├── config.js             # Configuration loader
-│   ├── heyreach-client.js    # Heyreach API integration
-│   ├── acceptance-tracker.js # Connection acceptance polling
-│   └── message-sender.js     # Message sending (not functional)
-├── batch-qualify.js          # Batch qualification module and stats utility
-├── check-acceptances.js      # Script to check accepted connections
-├── batch-send.js             # Script to retry failed sends
-├── data/
-│   ├── qualified/            # Qualified prospects (JSON)
-│   └── disqualified/         # Disqualified prospects (JSON)
-├── config.json               # User configuration (gitignored)
-└── MCP_USAGE.md              # Detailed MCP usage guide
+│   ├── server.js                  # Main Express API server
+│   ├── config.js                  # Configuration loader (env + config.json)
+│   ├── database/
+│   │   ├── db.js                  # SQLite initialization
+│   │   └── schema.sql             # Database schema
+│   ├── routes/
+│   │   ├── profiles.js            # Profile management
+│   │   ├── qualifications.js      # LLM Router integration
+│   │   ├── outreach.js            # Heyreach campaign integration
+│   │   ├── connections.js         # Connection tracking
+│   │   └── stats.js               # Statistics & analytics
+│   ├── csv-loader.js              # CSV parsing utilities (legacy)
+│   ├── heyreach-client.js         # Heyreach API client (legacy)
+│   └── acceptance-tracker.js      # Connection tracking (legacy)
+├── batch-qualify.js               # Batch qualification module
+├── check-acceptances.js           # Script to check accepted connections
+├── batch-send.js                  # Script to retry failed sends
+├── data/                          # SQLite database (gitignored)
+├── config.json                    # Local configuration (gitignored)
+├── .env.example                   # Environment variable template
+├── railway.json                   # Railway deployment config
+├── RAILWAY.md                     # Deployment guide
+└── package.json                   # Dependencies
 ```
 
 ## Key Implementation Details
 
-### Batch Processing Logic
+### Query Parameter Filtering
 
-`get_next_batch` tool (mcp-server.js:717-780):
-- Returns up to 5 profiles (default) or 10 (max)
-- Shows summary info for quick screening (name, title, company, location, about snippet)
-- Includes process instructions (quick screen → deep analysis → save all)
-- Forceful reminder to load Google Drive criteria on first batch
-- Checks for failed Heyreach sends and alerts user
+Profiles and qualifications support flexible filtering:
 
-### Failed Send Detection
+```bash
+# Unqualified profiles
+GET /api/profiles?status=new&limit=5
 
-On first batch, `get_next_batch` checks all qualified profiles:
-- Calls `getFailedHeyreachSends(qualifiedProfiles)` from heyreach-client.js
-- Filters profiles where `heyreach.sent === false && heyreach.error` exists
-- Shows warning with error details
-- Asks if user wants to retry
+# Qualified profiles
+GET /api/profiles?status=qualified&offset=10
 
-### Connection Acceptance Tracking
-
-Connection acceptance is tracked via polling (not webhooks):
-- Run `node check-acceptances.js` manually to check for accepted connections
-- Calls `checkAcceptedConnections()` from acceptance-tracker.js
-- Fetches campaign leads from Heyreach API with pagination
-- Filters for `leadConnectionStatus === "ConnectionAccepted"`
-- Matches accepted leads to qualified profiles by LinkedIn URL
-- Updates profile JSONs with `connectionAccepted: true`, `connectionAcceptedAt`, and `heyreachLeadId`
-
-### Message Sending Limitation
-
-The message-sender.js module exists but is not functional:
-- Heyreach's SendMessage API endpoint requires a `conversationId` parameter
-- New connections don't have a `conversationId` until a manual message is sent first
-- This makes automated message sending impossible for new connections
-- Workaround: Send follow-up messages manually via LinkedIn or Heyreach UI
-- The approved outreach messages in profile JSONs can be copied for manual use
-
-### Profile JSON Structure
-
-Qualified profiles include complete tracking:
-
-```json
-{
-  "name": "John Doe",
-  "title": "CEO",
-  "company": "Acme Corp",
-  "url": "https://linkedin.com/in/johndoe",
-  "location": "Denver, CO",
-  "about": "...",
-  "experience": [...],
-  "education": [...],
-  "qualification": {
-    "isQualified": true,
-    "analysis": {
-      "qualified": true,
-      "score": 85,
-      "reasoning": "Strong connector profile...",
-      "strengths": ["CEO/Partner", "Mid-market focus"],
-      "concerns": ["Location unknown"],
-      "recommendedApproach": "Position as technical partner..."
-    },
-    "qualifiedAt": "2025-11-05T..."
-  },
-  "heyreach": {
-    "sent": true,
-    "sentAt": "2025-11-05T...",
-    "heyreachId": "https://linkedin.com/in/johndoe",
-    "listId": "406467"
-  },
-  "outreachMessage": "Hey John, saw you're leading...",
-  "outreachGeneratedAt": "2025-11-05T...",
-  "outreachApproved": true,
-  "outreachApprovedAt": "2025-11-05T...",
-  "connectionAccepted": true,
-  "connectionAcceptedAt": "2025-11-05T...",
-  "heyreachLeadId": 122319124,
-  "outreachSent": false,
-  "postConnectionMessage": "Hi John, thanks for connecting! I wanted to...",
-  "postConnectionMessageSentAt": "2025-11-10T..."
-}
+# All qualifications with score filter (if implemented)
+GET /api/qualifications?qualified=true
 ```
 
-### File Naming Convention
+Uses dynamic WHERE clause building with parameterized queries for security.
 
-Output files use format: `qualified_TIMESTAMP_NAME.json`
+### Criteria Storage & Audit Trail
 
-Example: `qualified_1730824800000_John_Doe.json`
+All qualifications store:
+- **criteria_used**: JSON of criteria that produced the result
+- **llm_response**: Full LLM response for debugging
+- **recommended_approach**: How to approach the prospect
 
-Disqualified: `disqualified_TIMESTAMP_NAME.json`
-
-### Character Limits for Qualification
-
-To prevent MCP tool failures, character limits are enforced:
-- `reasoning`: Max 500 characters
-- `recommendedApproach`: Max 500 characters
-- `strengths`: Max 5 items, each max 100 characters
-- `concerns`: Max 5 items, each max 100 characters
-
-Validation happens in `save_qualification` handler before saving.
-
-## Development Notes
-
-### MCP Server Architecture
-
-The MCP server uses @modelcontextprotocol/sdk:
-- Server setup with ListToolsRequestSchema and CallToolRequestSchema handlers
-- Each tool defined with name, description, inputSchema
-- Handlers are async functions that return `{ content: [{type: 'text', text: '...'}] }`
-- Errors returned with `isError: true` flag
-
-### Async Qualification with Heyreach
-
-`saveQualification` function (mcp-server.js:368-434):
-- Made async to support Heyreach API calls
-- After saving qualified profile, calls `await addProspectToCampaign(profile)`
-- Wraps Heyreach call in try/catch to handle failures gracefully
-- Updates prospect JSON with `heyreach` object before final write
-- Returns `{ saved, filepath, qualified, heyreachSent }` to handler
-
-Handler must await the result: `const result = await saveQualification(...)`
+This enables:
+- Reproducing qualification logic
+- Debugging LLM decisions
+- Improving criteria over time
 
 ### Error Handling
 
-The system includes comprehensive error handling:
-- **Missing profiles**: Returns friendly "No more profiles" message
-- **Invalid JSON**: Skips corrupt files with try/catch
-- **Missing configuration**: Shows error with instructions
-- **Heyreach API failures**: Logs error, marks profile, continues workflow
-- **MCP tool parameter validation**: Validates lengths before processing
+API uses centralized error middleware:
+```javascript
+app.use((err, req, res, next) => {
+  console.error('Error:', err);
+  res.status(err.status || 500).json({
+    error: err.message || 'Internal server error',
+    ...(process.env.NODE_ENV === 'development' && { stack: err.stack })
+  });
+});
+```
 
-Errors are always returned to Claude Desktop with clear messages.
+Database operations wrapped in try/catch, passed to next(error).
+
+### Connection Acceptance Sync
+
+Pagination-aware sync:
+```javascript
+let page = 1;
+while (hasMore) {
+  const response = await fetchHeyreachLeads(campaignId, page);
+  // Process leads...
+  if (leads.length < 100) hasMore = false;
+  else page++;
+}
+```
+
+Matches by LinkedIn URL, creates/updates connection records.
+
+## Development
+
+### Local Setup
+
+```bash
+# Install dependencies
+npm install
+
+# Create .env from template
+cp .env.example .env
+
+# Edit .env with your API keys
+nano .env
+
+# Start server
+npm start
+
+# Or with auto-reload
+npm run dev
+```
 
 ### Testing
 
-Test the MCP server:
-
 ```bash
-# Start server locally
-npm run mcp
+# Health check
+curl http://localhost:3000/health
 
-# In Claude Desktop, try:
-# "Get CSV info"
-# "Get the next batch"
-# "Get qualification stats"
-# "Get next profile for outreach"
-# "Get next outreach message to review"
+# View API endpoints
+curl http://localhost:3000/
+
+# Import test CSV
+curl -X POST http://localhost:3000/api/profiles/import \
+  -F "csv=@test.csv"
+
+# Check stats
+curl http://localhost:3000/api/stats
 ```
 
-Test connection acceptance tracking:
+## Railway Deployment
 
+See **RAILWAY.md** for comprehensive deployment guide.
+
+Quick deploy:
 ```bash
-# Check for accepted connections
-node check-acceptances.js
-
-# Verify profiles were updated
-ls data/qualified/
+railway init
+railway up
 ```
+
+Set environment variables in Railway dashboard:
+- PORT, DATABASE_PATH, LLM_ROUTER_URL
+- HEYREACH_API_KEY, HEYREACH_LIST_ID, HEYREACH_CAMPAIGN_ID
+
+Add volume mount at `/app/data` for database persistence.
 
 ## Common Issues
 
-### No Profiles Found
+### LLM Router Connection
 
-**Problem:** "No more profiles to qualify"
-
-**Solutions:**
-1. Check CSV exists in ~/Downloads
-2. Verify CSV is from LinkedIn Sales Navigator (not regular LinkedIn)
-3. Use `get_csv_info` to see what's loaded
-4. Ensure CSV has standard Sales Navigator format
-
-### Heyreach Integration Failures
-
-**Problem:** "Failed to send to Heyreach"
+**Problem:** "LLM Router error: 500"
 
 **Solutions:**
-1. Verify `config.json` has correct API key
-2. Check listId (406467) exists in Heyreach account
-3. Ensure profile has valid LinkedIn URL
-4. Check MCP server logs for detailed error (console.error output)
-5. Test Heyreach API key: `curl --location 'https://api.heyreach.io/api/public/auth/CheckApiKey' --header 'X-API-KEY: your-key'`
+1. Verify LLM_ROUTER_URL is correct
+2. Test: `curl ${LLM_ROUTER_URL}/health`
+3. Check LLM Router logs for errors
+4. Verify criteria JSON is valid
 
-### MCP Server Not Connecting
+### Heyreach API Failures
 
-**Problem:** Claude Desktop shows "Server not available"
-
-**Solutions:**
-1. Check path in `claude_desktop_config.json` is absolute
-2. Verify `node` command works: `which node`
-3. Restart Claude Desktop completely
-4. Test server manually: `npm run mcp`
-5. Check for port conflicts or crashes
-
-### Character Limit Errors
-
-**Problem:** "Validation failed - text too long"
+**Problem:** "Heyreach API error (401)"
 
 **Solutions:**
-1. Keep reasoning under 500 characters (~2-3 sentences)
-2. Keep strengths/concerns under 100 characters each (~1 sentence)
-3. Maximum 5 items per array
-4. Claude Desktop should automatically keep responses concise
+1. Verify HEYREACH_API_KEY in env
+2. Test: `curl --location 'https://api.heyreach.io/api/public/auth/CheckApiKey' --header 'X-API-KEY: your-key'`
+3. Check list ID exists: `HEYREACH_LIST_ID`
+4. Verify campaign ID: `HEYREACH_CAMPAIGN_ID`
 
-## Testing & Debugging
+### Database Locked
 
-Start with a small batch:
-```bash
-# Test with 5 profiles first
-# In Claude Desktop: "Get the next batch"
-# Qualify the 5 profiles
-# Check data/qualified/ for results
-# Verify Heyreach dashboard shows new leads in list 406467
-```
+**Problem:** "database is locked"
 
-Monitor logs:
-- MCP server outputs to stderr (visible in Claude Desktop console)
-- Heyreach send attempts logged: "Sending [name] to Heyreach..."
-- Success: "✓ Successfully sent [name] to Heyreach (ID: ...)"
-- Failure: "✗ Failed to send [name] to Heyreach: [error]"
+**Solutions:**
+1. Ensure only one server instance running
+2. Check for zombie processes: `ps aux | grep node`
+3. Delete .db-shm and .db-wal files
+4. Restart server
 
-Check connection acceptances periodically:
-```bash
-# Poll for accepted connections
-node check-acceptances.js
+### CSV Import Failures
 
-# Check if profiles were updated
-cat data/qualified/qualified_*.json | grep connectionAccepted
-```
+**Problem:** "Missing required fields"
+
+**Solutions:**
+1. Verify CSV is from LinkedIn Sales Navigator (not regular LinkedIn)
+2. Check CSV has profile_url and full_name columns
+3. Try re-exporting from LinkedIn
+4. Check import errors in response JSON
+
+## Migration from MCP Version
+
+If migrating from the previous MCP-based version:
+
+1. **Backup data:** Copy `data/qualified/` and `data/disqualified/` directories
+2. **Convert to API:** Use batch import script (to be created) or import CSVs
+3. **Update integrations:** Point any automation to new REST API endpoints
+4. **Remove MCP:** Uninstall from Claude Desktop if no longer needed
+
+Legacy MCP tools are preserved in `src/mcp-server.js` for reference.
 
 ## Future Enhancements
 
 Potential additions:
-- Automated polling for connection acceptances (scheduled task)
-- Bulk outreach generation (batch mode for generating multiple messages at once)
-- A/B testing for outreach messages
-- Response rate tracking and analysis
-- Integration with additional outreach platforms that support message automation
-- Alternative message sending solution (Chrome extension, LinkedIn API, etc.)
-- Notification system for accepted connections
+- API key authentication middleware
+- Rate limiting for production
+- PostgreSQL migration for larger scale
+- Automated connection acceptance polling (cron job)
+- Bulk message generation endpoint
+- Response rate tracking and A/B testing
+- Chrome extension for LinkedIn message sending
+- Webhook support for real-time Heyreach updates
 
 ## License
 
