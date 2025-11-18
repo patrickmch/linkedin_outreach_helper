@@ -1,7 +1,7 @@
 {
   "name": "linkedin-outreach-helper",
-  "version": "3.0.0",
-  "description": "LinkedIn outreach automation API with AI-powered lead qualification",
+  "version": "4.0.0",
+  "description": "LinkedIn outreach automation with webhook bot, Redis storage, and AI-powered lead qualification",
   "main": "src/server.js",
   "type": "module",
   "scripts": {
@@ -9,7 +9,10 @@
     "dev": "node --watch src/server.js",
     "stats": "node batch-qualify.js",
     "send": "node batch-send.js",
-    "sync": "node check-acceptances.js"
+    "sync": "node check-acceptances.js",
+    "build": "tsc",
+    "start:webhook": "node dist/webhook/server.js",
+    "dev:webhook": "tsc && node --watch dist/webhook/server.js"
   },
   "keywords": [
     "linkedin",
@@ -21,6 +24,7 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
+    "@upstash/redis": "^1.35.6",
     "cors": "^2.8.5",
     "csv-parse": "^6.1.0",
     "dotenv": "^16.4.5",
@@ -28,5 +32,12 @@
     "multer": "^1.4.5-lts.1",
     "sqlite": "^5.1.1",
     "sqlite3": "^5.1.7"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.5",
+    "@types/node": "^24.10.1",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.3"
   }
 }
