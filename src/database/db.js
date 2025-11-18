@@ -5,7 +5,7 @@
 
 import sqlite3 from 'sqlite3';
 import { open } from 'sqlite';
-import { readFileSync } from 'fs';
+import { readFileSync, mkdirSync, existsSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
@@ -22,6 +22,13 @@ let db = null;
 export async function initializeDatabase(dbPath = './data/linkedin-outreach.db') {
   if (db) {
     return db;
+  }
+
+  // Ensure the directory exists
+  const dbDir = dirname(dbPath);
+  if (!existsSync(dbDir)) {
+    mkdirSync(dbDir, { recursive: true });
+    console.log('✓ Created database directory:', dbDir);
   }
 
   db = await open({
