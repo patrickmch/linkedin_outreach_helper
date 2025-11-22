@@ -20,16 +20,18 @@ export async function createContact(profile: LinkedInProfile): Promise<Contact> 
   const contact: Contact = {
     rawData: profile,
     status: 'pending',
-    qualificationScore: null,
+    tier: null,
     qualificationReason: null,
+    roleDetected: null,
+    clientTypeInferred: null,
+    mindsetSignals: null,
     processedAt: null,
-    sentToHeyreachAt: null,
     createdAt: new Date().toISOString()
   };
 
   const key = `${CONTACT_KEY_PREFIX}${profile.linkedinUrl}`;
 
-  // Store contact (Upstash Redis handles JSON serialization)
+  // Store contact
   await redis.set(key, contact);
 
   // Add to pending set
@@ -83,7 +85,7 @@ export async function updateContact(
     await moveContactBetweenSets(linkedinUrl, contact.status, updates.status);
   }
 
-  console.log(`✓ Updated contact: ${contact.rawData.name} - Status: ${updatedContact.status}`);
+  console.log(`✓ Updated contact: ${contact.rawData.name} - Status: ${updatedContact.status}, Tier: ${updatedContact.tier}`);
 
   return updatedContact;
 }

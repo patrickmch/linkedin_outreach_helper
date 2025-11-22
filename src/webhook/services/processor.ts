@@ -5,7 +5,6 @@
 
 import { getContact, updateContact } from './contact-storage.js';
 import { qualifyProfile, isQualified } from './qualification.js';
-import { config } from '../config.js';
 
 /**
  * Process a contact asynchronously
@@ -26,37 +25,34 @@ export async function processContact(linkedinUrl: string): Promise<void> {
     // 2. Call LLM to qualify profile
     const result = await qualifyProfile(contact.rawData);
 
-    // 3. Determine new status
-    const qualified = isQualified(result.score);
+    // 3. Determine status based on decision
+    const qualified = isQualified(result.decision);
     const newStatus = qualified ? 'qualified' : 'disqualified';
 
-    // 4. Update contact in Redis
+    // 4. Update contact in Redis with full result
     await updateContact(linkedinUrl, {
       status: newStatus,
-      qualificationScore: result.score,
-      qualificationReason: result.reasoning,
+      tier: result.decision,
+      qualificationReason: result.reason,
+      roleDetected: result.roleDetected,
+      clientTypeInferred: result.clientTypeInferred,
+      mindsetSignals: result.mindsetSignals,
       processedAt: new Date().toISOString()
     });
 
-    // 5. Check if should send to Heyreach (logging only for now)
-    if (qualified && result.score > config.QUALIFICATION_THRESHOLD) {
-      console.log(`\n🎯 QUALIFIED FOR HEYREACH:`);
+    // 5. Log result
+    if (qualified) {
+      console.log(`\n🎯 QUALIFIED [${result.decision}]:`);
       console.log(`   Name: ${contact.rawData.name}`);
-      console.log(`   Title: ${contact.rawData.title}`);
-      console.log(`   Company: ${contact.rawData.company}`);
-      console.log(`   Score: ${result.score}`);
-      console.log(`   Reasoning: ${result.reasoning}`);
-      console.log(`   LinkedIn: ${linkedinUrl}`);
-      console.log(`   → Would send to Heyreach (integration pending)\n`);
-
-      // TODO: Actual Heyreach integration
-      // await sendToHeyreach(contact);
-      // await updateContact(linkedinUrl, { sentToHeyreachAt: new Date().toISOString() });
+      console.log(`   Title: ${contact.rawData.currentTitle || contact.rawData.headline}`);
+      console.log(`   Company: ${contact.rawData.currentCompany}`);
+      console.log(`   Role: ${result.roleDetected}`);
+      console.log(`   Reason: ${result.reason}`);
+      console.log(`   LinkedIn: ${linkedinUrl}\n`);
     } else {
-      console.log(`\n❌ DISQUALIFIED:`);
+      console.log(`\n❌ SKIPPED:`);
       console.log(`   Name: ${contact.rawData.name}`);
-      console.log(`   Score: ${result.score}`);
-      console.log(`   Reasoning: ${result.reasoning}\n`);
+      console.log(`   Reason: ${result.reason}\n`);
     }
 
     console.log(`✓ Processing complete for ${contact.rawData.name}`);
@@ -67,7 +63,7 @@ export async function processContact(linkedinUrl: string): Promise<void> {
     try {
       await updateContact(linkedinUrl, {
         status: 'disqualified',
-        qualificationScore: 0,
+        tier: 'SKIP',
         qualificationReason: `Processing error: ${error instanceof Error ? error.message : 'Unknown error'}`,
         processedAt: new Date().toISOString()
       });

@@ -3,72 +3,115 @@
  * Integrates with LLM Router API to qualify LinkedIn profiles
  */
 
+import { readFileSync } from 'fs';
+import { join, dirname } from 'path';
+import { fileURLToPath } from 'url';
 import { config } from '../config.js';
-import { LinkedInProfile, LLMQualificationRequest, LLMQualificationResponse, QualificationResult } from '../types.js';
+import { LinkedInProfile, LLMQualificationRequest, LLMQualificationResponse, QualificationResult, QualificationDecision } from '../types.js';
 
-const QUALIFICATION_CRITERIA = `
-Looking for VP, Director, CTO, CEO level at tech/SaaS companies, 50-1000 employees.
-Avoid freelancers and consultants.
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
-Evaluate based on:
-- Job title seniority (VP, Director, C-level)
-- Company type (tech/SaaS preferred)
-- Company size (50-1000 employees ideal)
-- No freelancer/consultant indicators
-`;
+// Load qualification prompt from file
+let QUALIFICATION_PROMPT: string;
+
+function loadPrompt(): string {
+  if (QUALIFICATION_PROMPT) return QUALIFICATION_PROMPT;
+
+  try {
+    // Path from dist/webhook/services/ to project root prompts/
+    const promptPath = join(__dirname, '..', '..', '..', 'prompts', 'qualification.md');
+    QUALIFICATION_PROMPT = readFileSync(promptPath, 'utf-8');
+    console.log('✓ Loaded qualification prompt from file');
+    return QUALIFICATION_PROMPT;
+  } catch (error) {
+    console.error('✗ Failed to load qualification prompt:', error);
+    throw new Error('Could not load qualification prompt file');
+  }
+}
 
 /**
- * Build qualification prompt for LLM
+ * Build the complete prompt with profile data
  */
-function buildQualificationPrompt(profile: LinkedInProfile): string {
-  const experienceSummary = profile.experience
-    ?.map((exp, i) => `${i + 1}. ${exp.title} at ${exp.company}`)
-    .join('\n') || 'No experience data';
+function buildPrompt(profile: LinkedInProfile): string {
+  const criteria = loadPrompt();
 
-  return `Analyze this LinkedIn profile and determine if they are a qualified lead.
+  // Build job history string
+  const jobHistoryStr = profile.jobHistory
+    ?.map((job, i) => `${i + 1}. ${job.title} at ${job.company}${job.duration ? ` (${job.duration})` : ''}`)
+    .join('\n') || 'Not available';
 
-Profile:
-Name: ${profile.name}
-Title: ${profile.title}
-Company: ${profile.company}
-Location: ${profile.location || 'Unknown'}
-About: ${profile.about || 'No about section'}
+  return `${criteria}
 
-Experience:
-${experienceSummary}
+---
 
-Qualification Criteria:
-${QUALIFICATION_CRITERIA}
+## PROFILE TO EVALUATE
 
-Respond with ONLY a JSON object in this exact format:
-{
-  "qualified": true/false,
-  "score": 0-100,
-  "reasoning": "Brief explanation (max 200 chars)"
-}`;
+name: ${profile.name}
+headline: ${profile.headline || 'Not provided'}
+summary: ${profile.summary || 'Not provided'}
+current_company: ${profile.currentCompany || 'Not provided'}
+current_title: ${profile.currentTitle || 'Not provided'}
+job_history:
+${jobHistoryStr}
+industry: ${profile.industry || 'Not provided'}
+location: ${profile.location || 'Not provided'}
+skills: ${profile.skills || 'Not provided'}
+followers: ${profile.followers || 'Not provided'}
+
+Evaluate this profile and return your JSON decision.`;
+}
+
+/**
+ * Parse qualification result from LLM response
+ */
+function parseResult(response: string): QualificationResult {
+  try {
+    // Extract JSON from response
+    const jsonMatch = response.match(/\{[\s\S]*\}/);
+
+    if (!jsonMatch) {
+      throw new Error('No JSON found in LLM response');
+    }
+
+    const parsed = JSON.parse(jsonMatch[0]);
+
+    // Validate decision field
+    const validDecisions: QualificationDecision[] = ['TIER_1', 'TIER_2', 'TIER_3', 'SKIP'];
+    if (!validDecisions.includes(parsed.decision)) {
+      throw new Error(`Invalid decision: ${parsed.decision}`);
+    }
+
+    return {
+      decision: parsed.decision,
+      reason: parsed.reason || 'No reason provided',
+      roleDetected: parsed.role_detected || '',
+      clientTypeInferred: parsed.client_type_inferred || '',
+      mindsetSignals: parsed.mindset_signals || ''
+    };
+  } catch (error) {
+    console.error('Failed to parse LLM response:', error);
+    console.error('Response was:', response);
+
+    return {
+      decision: 'SKIP',
+      reason: 'Failed to parse LLM response',
+      roleDetected: '',
+      clientTypeInferred: '',
+      mindsetSignals: ''
+    };
+  }
 }
 
 /**
  * Call LLM Router API to qualify profile
  */
 export async function qualifyProfile(profile: LinkedInProfile): Promise<QualificationResult> {
-  const prompt = buildQualificationPrompt(profile);
+  const prompt = buildPrompt(profile);
 
   const requestBody: LLMQualificationRequest = {
     prompt,
-    llm: 'claude',
-    context_source: 'json',
-    context_config: {
-      data: {
-        criteria: QUALIFICATION_CRITERIA,
-        profile: {
-          name: profile.name,
-          title: profile.title,
-          company: profile.company,
-          location: profile.location
-        }
-      }
-    }
+    llm: 'claude'
   };
 
   try {
@@ -86,64 +129,28 @@ export async function qualifyProfile(profile: LinkedInProfile): Promise<Qualific
 
     const data = await response.json() as LLMQualificationResponse;
 
-    // Parse JSON from LLM response
-    const result = parseQualificationResult(data.response);
+    // Parse result from LLM response
+    const result = parseResult(data.response);
 
-    console.log(`✓ Qualified ${profile.name}: ${result.qualified ? 'YES' : 'NO'} (Score: ${result.score})`);
+    console.log(`✓ Qualified ${profile.name}: ${result.decision} - ${result.reason}`);
 
     return result;
   } catch (error) {
     console.error(`✗ Failed to qualify ${profile.name}:`, error);
 
-    // Return default disqualified result on error
     return {
-      qualified: false,
-      score: 0,
-      reasoning: `Error during qualification: ${error instanceof Error ? error.message : 'Unknown error'}`
+      decision: 'SKIP',
+      reason: `Error during qualification: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      roleDetected: '',
+      clientTypeInferred: '',
+      mindsetSignals: ''
     };
   }
 }
 
 /**
- * Parse qualification result from LLM response
+ * Check if decision is qualified (any tier)
  */
-function parseQualificationResult(response: string): QualificationResult {
-  try {
-    // Try to extract JSON from response
-    const jsonMatch = response.match(/\{[\s\S]*\}/);
-
-    if (!jsonMatch) {
-      throw new Error('No JSON found in LLM response');
-    }
-
-    const parsed = JSON.parse(jsonMatch[0]);
-
-    // Validate required fields
-    if (typeof parsed.qualified !== 'boolean' || typeof parsed.score !== 'number') {
-      throw new Error('Invalid qualification result structure');
-    }
-
-    return {
-      qualified: parsed.qualified,
-      score: parsed.score,
-      reasoning: parsed.reasoning || 'No reasoning provided'
-    };
-  } catch (error) {
-    console.error('Failed to parse LLM response:', error);
-    console.error('Response was:', response);
-
-    // Return default result
-    return {
-      qualified: false,
-      score: 0,
-      reasoning: 'Failed to parse LLM response'
-    };
-  }
-}
-
-/**
- * Check if qualified based on score threshold
- */
-export function isQualified(score: number): boolean {
-  return score >= config.QUALIFICATION_THRESHOLD;
+export function isQualified(decision: QualificationDecision): boolean {
+  return decision === 'TIER_1' || decision === 'TIER_2' || decision === 'TIER_3';
 }

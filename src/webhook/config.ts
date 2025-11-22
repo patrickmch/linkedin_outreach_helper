@@ -27,8 +27,7 @@ export function loadConfig(): Config {
     PORT: parseInt(process.env.PORT || '3001', 10),
     UPSTASH_REDIS_REST_URL: process.env.UPSTASH_REDIS_REST_URL!,
     UPSTASH_REDIS_REST_TOKEN: process.env.UPSTASH_REDIS_REST_TOKEN!,
-    LLM_ROUTER_URL: process.env.LLM_ROUTER_URL!,
-    QUALIFICATION_THRESHOLD: parseInt(process.env.QUALIFICATION_THRESHOLD || '70', 10)
+    LLM_ROUTER_URL: process.env.LLM_ROUTER_URL!
   };
 }
 

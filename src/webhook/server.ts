@@ -95,7 +95,6 @@ async function startServer() {
       console.log(`  Port: ${config.PORT}`);
       console.log(`  Redis: Connected`);
       console.log(`  LLM Router: ${config.LLM_ROUTER_URL}`);
-      console.log(`  Qualification Threshold: ${config.QUALIFICATION_THRESHOLD}`);
       console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
       console.log(`  Webhook: http://localhost:${config.PORT}/webhook/linkedin-helper`);
       console.log(`  Health: http://localhost:${config.PORT}/health`);

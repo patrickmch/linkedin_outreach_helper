@@ -2,19 +2,57 @@
  * TypeScript Type Definitions for LinkedIn Outreach Webhook Bot
  */
 
+// LinkedHelper sends snake_case fields
+export interface LinkedHelperPayload {
+  id?: string;
+  first_name?: string;
+  last_name?: string;
+  full_name?: string;
+  profile_url?: string;
+  headline?: string;
+  summary?: string;
+  about?: string;
+  company?: string;
+  current_company?: string;
+  position?: string;
+  current_title?: string;
+  title?: string;
+  location?: string;
+  location_name?: string;
+  industry?: string;
+  skills?: string;
+  connections?: number;
+  connections_count?: number;
+  followers?: number;
+  email?: string;
+  phone?: string;
+  website?: string;
+  // Job history fields (LinkedHelper sends position_1_*, position_2_*, etc.)
+  [key: string]: any;
+}
+
+// Normalized internal profile format
 export interface LinkedInProfile {
   name: string;
+  linkedinUrl: string;
+  headline?: string;
+  summary?: string;
+  currentCompany?: string;
+  currentTitle?: string;
+  location?: string;
+  industry?: string;
+  skills?: string;
+  followers?: number;
+  jobHistory?: JobHistoryEntry[];
+  // Preserve raw data for debugging
+  rawPayload?: LinkedHelperPayload;
+}
+
+export interface JobHistoryEntry {
   title: string;
   company: string;
-  linkedinUrl: string;
-  location?: string;
-  about?: string;
-  headline?: string;
-  connections_count?: number;
-  experience?: Experience[];
-  education?: Education[];
-  skills?: string;
-  [key: string]: any; // Allow additional fields
+  duration?: string;
+  description?: string;
 }
 
 export interface Experience {
@@ -30,15 +68,20 @@ export interface Education {
   field?: string;
 }
 
-export type ContactStatus = 'pending' | 'qualified' | 'disqualified' | 'sent_to_heyreach';
+// Qualification decision types
+export type QualificationDecision = 'TIER_1' | 'TIER_2' | 'TIER_3' | 'SKIP';
+
+export type ContactStatus = 'pending' | 'qualified' | 'disqualified';
 
 export interface Contact {
   rawData: LinkedInProfile;
   status: ContactStatus;
-  qualificationScore: number | null;
+  tier: QualificationDecision | null;
   qualificationReason: string | null;
+  roleDetected: string | null;
+  clientTypeInferred: string | null;
+  mindsetSignals: string | null;
   processedAt: string | null;
-  sentToHeyreachAt: string | null;
   createdAt: string;
 }
 
@@ -58,19 +101,24 @@ export interface LLMQualificationResponse {
 }
 
 export interface QualificationResult {
-  qualified: boolean;
-  score: number;
-  reasoning: string;
+  decision: QualificationDecision;
+  reason: string;
+  roleDetected: string;
+  clientTypeInferred: string;
+  mindsetSignals: string;
 }
 
 export interface WebhookRequest {
-  profile: LinkedInProfile;
+  // Support both formats
+  profile?: LinkedInProfile;
+  // LinkedHelper flat format - just use the payload directly
+  [key: string]: any;
 }
 
 export interface WebhookResponse {
   success: boolean;
   message: string;
-  linkedinUrl: string;
+  linkedinUrl?: string;
 }
 
 export interface ContactsResponse {
@@ -89,5 +137,4 @@ export interface Config {
   UPSTASH_REDIS_REST_URL: string;
   UPSTASH_REDIS_REST_TOKEN: string;
   LLM_ROUTER_URL: string;
-  QUALIFICATION_THRESHOLD: number;
 }
